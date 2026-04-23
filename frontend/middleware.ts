@@ -6,11 +6,19 @@ const isProtectedRoute = createRouteMatcher([
   "/new-application(.*)",
 ]);
 
-export default clerkMiddleware(async (auth, req) => {
-  if (isProtectedRoute(req)) {
-    await auth.protect();
+export default clerkMiddleware(
+  async (auth, req) => {
+    if (isProtectedRoute(req)) {
+      await auth.protect();
+    }
+  },
+  {
+    authorizedParties: [
+      "http://localhost:3000",
+      "https://underlytics.vercel.app",
+    ],
   }
-});
+);
 
 export const config = {
   matcher: [
