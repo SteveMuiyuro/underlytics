@@ -6,9 +6,16 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const actor = await getBackendActor();
+  let role = "applicant";
+
+  try {
+    const actor = await getBackendActor();
+    role = actor.role;
+  } catch {
+    role = "applicant";
+  }
 
   return (
-    <AppShell role={actor.role}>{children}</AppShell>
+    <AppShell role={role}>{children}</AppShell>
   );
 }

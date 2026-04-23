@@ -64,6 +64,5 @@ export const getBackendActor = cache(async (): Promise<BackendActor> => {
 });
 
 export async function getBackendActorHeaders(): Promise<HeadersInit> {
-  await getBackendActor();
   return getBackendAuthHeaders();
 }
