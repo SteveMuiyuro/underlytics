@@ -1,4 +1,31 @@
+import type { NextRequest } from "next/server";
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+
+const CLERK_MIDDLEWARE_DEBUG = process.env.CLERK_MIDDLEWARE_DEBUG === "true";
+
+function decodeJwtAzp(token: string | undefined) {
+  if (!token) {
+    return null;
+  }
+
+  const payload = token.split(".")[1];
+  if (!payload) {
+    return null;
+  }
+
+  try {
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(
+      normalized.length + ((4 - (normalized.length % 4)) % 4),
+      "="
+    );
+    const decoded = JSON.parse(atob(padded)) as { azp?: unknown };
+
+    return typeof decoded.azp === "string" ? decoded.azp : null;
+  } catch {
+    return null;
+  }
+}
 
 function parseAuthorizedParties(requestOrigin: string) {
   const configured = process.env.CLERK_AUTHORIZED_PARTIES
@@ -10,6 +37,8 @@ function parseAuthorizedParties(requestOrigin: string) {
 
   parties.add("http://localhost:3000");
   parties.add("https://underlytics.vercel.app");
+  parties.add("https://underlytics-steve-mwangis-projects.vercel.app");
+  parties.add("https://underlytics-git-main-steve-mwangis-projects.vercel.app");
 
   if (process.env.VERCEL_URL) {
     parties.add(`https://${process.env.VERCEL_URL}`);
@@ -20,6 +49,26 @@ function parseAuthorizedParties(requestOrigin: string) {
   }
 
   return [...parties];
+}
+
+function logClerkMiddlewareState(req: NextRequest, authorizedParties: string[]) {
+  if (!CLERK_MIDDLEWARE_DEBUG) {
+    return;
+  }
+
+  const sessionToken = req.cookies.get("__session")?.value;
+
+  console.info(
+    JSON.stringify({
+      scope: "clerk-middleware",
+      requestOrigin: req.nextUrl.origin,
+      requestHost: req.nextUrl.host,
+      requestPath: req.nextUrl.pathname,
+      vercelUrl: process.env.VERCEL_URL ?? null,
+      tokenAzp: decodeJwtAzp(sessionToken),
+      authorizedParties,
+    })
+  );
 }
 
 const isProtectedRoute = createRouteMatcher([
@@ -35,8 +84,12 @@ export default clerkMiddleware(
     }
   },
   (req) => {
+    const authorizedParties = parseAuthorizedParties(req.nextUrl.origin);
+
+    logClerkMiddlewareState(req, authorizedParties);
+
     return {
-      authorizedParties: parseAuthorizedParties(req.nextUrl.origin),
+      authorizedParties,
     };
   }
 );
