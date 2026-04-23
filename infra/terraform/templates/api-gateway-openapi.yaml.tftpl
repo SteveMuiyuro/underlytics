@@ -1,0 +1,104 @@
+swagger: "2.0"
+info:
+  title: Underlytics Public API
+  version: "1.0.0"
+schemes:
+  - https
+paths:
+  /:
+    get:
+      operationId: root
+      x-google-backend:
+        address: ${gateway_backend_url}
+        path_translation: APPEND_PATH_TO_ADDRESS
+      responses:
+        "200":
+          description: Root response
+  /healthz:
+    get:
+      operationId: healthz
+      x-google-backend:
+        address: ${gateway_backend_url}
+        path_translation: APPEND_PATH_TO_ADDRESS
+      responses:
+        "200":
+          description: Health response
+  /api/{proxy=**}:
+    get:
+      operationId: apiGet
+      parameters:
+        - name: proxy
+          in: path
+          required: true
+          type: string
+      x-google-backend:
+        address: ${gateway_backend_url}
+        path_translation: APPEND_PATH_TO_ADDRESS
+      responses:
+        "200":
+          description: Proxied GET response
+    post:
+      operationId: apiPost
+      parameters:
+        - name: proxy
+          in: path
+          required: true
+          type: string
+      x-google-backend:
+        address: ${gateway_backend_url}
+        path_translation: APPEND_PATH_TO_ADDRESS
+      responses:
+        "200":
+          description: Proxied POST response
+    put:
+      operationId: apiPut
+      parameters:
+        - name: proxy
+          in: path
+          required: true
+          type: string
+      x-google-backend:
+        address: ${gateway_backend_url}
+        path_translation: APPEND_PATH_TO_ADDRESS
+      responses:
+        "200":
+          description: Proxied PUT response
+    patch:
+      operationId: apiPatch
+      parameters:
+        - name: proxy
+          in: path
+          required: true
+          type: string
+      x-google-backend:
+        address: ${gateway_backend_url}
+        path_translation: APPEND_PATH_TO_ADDRESS
+      responses:
+        "200":
+          description: Proxied PATCH response
+    delete:
+      operationId: apiDelete
+      parameters:
+        - name: proxy
+          in: path
+          required: true
+          type: string
+      x-google-backend:
+        address: ${gateway_backend_url}
+        path_translation: APPEND_PATH_TO_ADDRESS
+      responses:
+        "200":
+          description: Proxied DELETE response
+    options:
+      operationId: apiOptions
+      parameters:
+        - name: proxy
+          in: path
+          required: true
+          type: string
+      x-google-backend:
+        address: ${gateway_backend_url}
+        path_translation: APPEND_PATH_TO_ADDRESS
+      responses:
+        "200":
+          description: Proxied OPTIONS response
