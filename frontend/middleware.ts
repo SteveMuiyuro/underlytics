@@ -1,5 +1,25 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
+function parseAuthorizedParties() {
+  const configured = process.env.CLERK_AUTHORIZED_PARTIES
+    ?.split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (configured?.length) {
+    return configured;
+  }
+
+  return [
+    "http://localhost:3000",
+    "https://underlytics.vercel.app",
+    // Vercel keeps additional production aliases active for the same deployment.
+    // A session token can carry any of these origins in its azp claim.
+    "https://underlytics-steve-mwangis-projects.vercel.app",
+    "https://underlytics-git-main-steve-mwangis-projects.vercel.app",
+  ];
+}
+
 const isProtectedRoute = createRouteMatcher([
   "/dashboard(.*)",
   "/applications(.*)",
@@ -13,10 +33,7 @@ export default clerkMiddleware(
     }
   },
   {
-    authorizedParties: [
-      "http://localhost:3000",
-      "https://underlytics.vercel.app",
-    ],
+    authorizedParties: parseAuthorizedParties(),
   }
 );
 
