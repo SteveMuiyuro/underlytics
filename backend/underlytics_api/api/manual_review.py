@@ -19,6 +19,9 @@ from underlytics_api.schemas.manual_review import (
     ManualReviewCaseDetailResponse,
     ManualReviewCaseSummaryResponse,
 )
+from underlytics_api.services.notification_service import (
+    send_manual_review_completed_notification,
+)
 
 router = APIRouter(prefix="/api/manual-review", tags=["Manual Review"])
 
@@ -222,6 +225,10 @@ def create_manual_review_action(
     db.commit()
 
     db.refresh(case)
+
+    if new_decision is not None:
+        send_manual_review_completed_notification(db, manual_review_case_id=case.id)
+
     refreshed_actions = (
         db.query(ManualReviewAction)
         .filter(ManualReviewAction.manual_review_case_id == case.id)

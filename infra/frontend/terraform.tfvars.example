@@ -1,0 +1,6 @@
+environment          = "production"
+vercel_project_name  = "underlytics"
+vercel_project_id    = ""
+vercel_org_id        = ""
+frontend_domain      = ""
+backend_api_base_url = ""

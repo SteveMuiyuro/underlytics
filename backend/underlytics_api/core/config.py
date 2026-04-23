@@ -21,6 +21,8 @@ def _optional_env(name: str) -> str | None:
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./underlytics.db")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+RESEND_API_KEY = _optional_env("RESEND_API_KEY")
+EMAIL_FROM = _optional_env("EMAIL_FROM")
 LANGFUSE_PUBLIC_KEY = os.getenv("LANGFUSE_PUBLIC_KEY")
 LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY")
 LANGFUSE_HOST = os.getenv(

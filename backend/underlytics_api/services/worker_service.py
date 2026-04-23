@@ -17,6 +17,9 @@ from underlytics_api.services.guardrail_service import (
     enforce_decision_guardrails,
     validate_agent_output,
 )
+from underlytics_api.services.notification_service import (
+    send_automated_decision_notification,
+)
 from underlytics_api.services.orchestrator_service import get_ready_steps
 from underlytics_api.services.tracing_service import (
     ensure_workflow_trace_context,
@@ -628,8 +631,9 @@ def run_workflow_plan(db: Session, plan: WorkflowPlan) -> UnderwritingJob:
             .all()
         )
 
+        final_decision = output_map.get("decision_summary", {}).get("decision")
+
         if refreshed_steps and all(step.status == "completed" for step in refreshed_steps):
-            final_decision = output_map.get("decision_summary", {}).get("decision")
 
             if final_decision == "manual_review":
                 plan.status = "awaiting_review"
@@ -676,4 +680,13 @@ def run_workflow_plan(db: Session, plan: WorkflowPlan) -> UnderwritingJob:
         db.add(legacy_job)
         db.commit()
         db.refresh(legacy_job)
+
+        if final_decision in {"approved", "rejected"}:
+            send_automated_decision_notification(
+                db,
+                application_id=application.id,
+                decision=final_decision,
+            )
+            db.refresh(legacy_job)
+
         return legacy_job
