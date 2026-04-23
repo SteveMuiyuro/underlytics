@@ -1,0 +1,70 @@
+name: Terraform Frontend
+
+on:
+  pull_request:
+    paths:
+      - "infra/frontend/**"
+      - ".github/workflows/terraform-frontend.yml"
+      - ".github/workflows/frontend-deploy.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "infra/frontend/**"
+      - ".github/workflows/terraform-frontend.yml"
+      - ".github/workflows/frontend-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/frontend
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive
+
+      - name: Initialize Terraform
+        run: terraform init -backend=false
+
+      - name: Validate Terraform
+        run: terraform validate
+
+  plan:
+    runs-on: ubuntu-latest
+    needs: validate
+    defaults:
+      run:
+        working-directory: infra/frontend
+    env:
+      TF_VAR_environment: production
+      TF_VAR_vercel_project_name: ${{ vars.VERCEL_PROJECT_NAME || 'underlytics' }}
+      TF_VAR_vercel_project_id: ${{ vars.VERCEL_PROJECT_ID }}
+      TF_VAR_vercel_org_id: ${{ vars.VERCEL_ORG_ID }}
+      TF_VAR_frontend_domain: ${{ vars.FRONTEND_DOMAIN || 'https://underlytics.vercel.app' }}
+      TF_VAR_backend_api_base_url: ${{ vars.NEXT_PUBLIC_API_URL || vars.BACKEND_API_BASE_URL || '' }}
+      TF_VAR_clerk_publishable_key_reference: ${{ vars.CLERK_PUBLISHABLE_KEY_REFERENCE || 'GitHub/Vercel environment variable' }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Initialize Terraform
+        run: terraform init -input=false
+
+      - name: Plan Terraform changes
+        run: terraform plan -input=false

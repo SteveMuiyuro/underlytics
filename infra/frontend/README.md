@@ -30,3 +30,10 @@ terraform init
 terraform plan
 terraform apply
 ```
+
+## GitHub Actions
+
+- `Terraform Frontend` validates and plans the `infra/frontend` scope on pull
+  requests, pushes to `main`, and manual dispatches.
+- `Frontend Deploy` applies the `infra/frontend` scope before the Vercel
+  production deployment so the tracked frontend metadata stays current.

@@ -19,6 +19,19 @@ def _optional_env(name: str) -> str | None:
     value = value.strip()
     return value or None
 
+
+def _csv_env(name: str, default: list[str]) -> list[str]:
+    value = os.getenv(name)
+    raw_items = value.split(",") if value is not None else default
+
+    normalized: list[str] = []
+    for item in raw_items:
+        origin = item.strip().rstrip("/")
+        if origin and origin not in normalized:
+            normalized.append(origin)
+
+    return normalized
+
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./underlytics.db")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 RESEND_API_KEY = _optional_env("RESEND_API_KEY")
@@ -38,6 +51,14 @@ CLERK_PUBLISHABLE_KEY = _optional_env("CLERK_PUBLISHABLE_KEY") or _optional_env(
 GOOGLE_CLOUD_PROJECT = _optional_env("GOOGLE_CLOUD_PROJECT")
 PUBSUB_WORKFLOW_TOPIC = _optional_env("PUBSUB_WORKFLOW_TOPIC")
 WORKFLOW_EXECUTION_MODE = _optional_env("WORKFLOW_EXECUTION_MODE") or "sync"
+CORS_ALLOWED_ORIGINS = _csv_env(
+    "CORS_ALLOWED_ORIGINS",
+    [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "https://underlytics.vercel.app",
+    ],
+)
 CLERK_AUTHORIZED_PARTIES = [
     party.strip()
     for party in os.getenv("CLERK_AUTHORIZED_PARTIES", "").split(",")

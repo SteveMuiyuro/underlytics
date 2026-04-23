@@ -9,6 +9,7 @@ from underlytics_api.api.loan_products import router as loan_products_router
 from underlytics_api.api.manual_review import router as manual_review_router
 from underlytics_api.api.users import router as users_router
 from underlytics_api.api.workflow import router as workflow_router
+from underlytics_api.core.config import CORS_ALLOWED_ORIGINS
 from underlytics_api.db.database import engine
 from underlytics_api.models.base import Base
 
@@ -16,10 +17,7 @@ app = FastAPI(title="Underlytics API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

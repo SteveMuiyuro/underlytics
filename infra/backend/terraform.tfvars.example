@@ -4,6 +4,7 @@ region             = "us-central1"
 db_region          = "us-central1"
 github_repository  = "SteveMuiyuro/underlytics"
 image_tag          = "latest"
+cors_allowed_origins = "http://localhost:3000,http://127.0.0.1:3000,https://underlytics.vercel.app"
 
 # Optional initial secret values
 admin_bootstrap_secret = ""

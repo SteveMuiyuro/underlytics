@@ -14,23 +14,52 @@ concurrency:
   group: frontend-deploy-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: true
 
+env:
+  TF_IN_AUTOMATION: true
+
 jobs:
   deploy:
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && vars.VERCEL_PROJECT_ID != '' && vars.VERCEL_ORG_ID != ''
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
     env:
       VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
       VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TF_VAR_environment: production
+      TF_VAR_vercel_project_name: ${{ vars.VERCEL_PROJECT_NAME || 'underlytics' }}
+      TF_VAR_vercel_project_id: ${{ vars.VERCEL_PROJECT_ID }}
+      TF_VAR_vercel_org_id: ${{ vars.VERCEL_ORG_ID }}
+      TF_VAR_frontend_domain: ${{ vars.FRONTEND_DOMAIN || 'https://underlytics.vercel.app' }}
+      TF_VAR_backend_api_base_url: ${{ vars.NEXT_PUBLIC_API_URL || vars.BACKEND_API_BASE_URL || '' }}
+      TF_VAR_clerk_publishable_key_reference: ${{ vars.CLERK_PUBLISHABLE_KEY_REFERENCE || 'GitHub/Vercel environment variable' }}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Initialize frontend Terraform
+        working-directory: infra/frontend
+        run: terraform init -input=false
+
+      - name: Validate frontend Terraform
+        working-directory: infra/frontend
+        run: terraform validate
+
+      - name: Apply frontend Terraform
+        working-directory: infra/frontend
+        run: terraform apply -auto-approve -input=false
+
+      - name: Capture frontend Terraform outputs
+        id: frontend_outputs
+        working-directory: infra/frontend
+        run: |
+          echo "frontend_domain=$(terraform output -raw frontend_domain)" >> "$GITHUB_OUTPUT"
+          echo "backend_api_base_url=$(terraform output -raw backend_api_base_url)" >> "$GITHUB_OUTPUT"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -40,16 +69,30 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
+        working-directory: frontend
         run: npm ci
 
       - name: Install Vercel CLI
         run: npm install --global vercel
 
       - name: Pull Vercel environment
+        working-directory: frontend
         run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
 
       - name: Build frontend for Vercel
+        working-directory: frontend
         run: vercel build --prod --token="$VERCEL_TOKEN"
 
       - name: Deploy frontend to Vercel
+        working-directory: frontend
         run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+
+      - name: Publish deployment summary
+        run: |
+          {
+            echo "## Frontend Deployment"
+            echo ""
+            echo "- Frontend domain: \`${{ steps.frontend_outputs.outputs.frontend_domain }}\`"
+            echo "- Backend API base URL: \`${{ steps.frontend_outputs.outputs.backend_api_base_url }}\`"
+            echo "- Vercel project ID: \`${VERCEL_PROJECT_ID}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

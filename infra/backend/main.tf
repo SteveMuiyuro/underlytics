@@ -89,6 +89,55 @@ locals {
     "vertex-model"             = var.vertex_model
   }
 
+  secret_value_presence = {
+    "admin-bootstrap-secret"   = trimspace(nonsensitive(var.admin_bootstrap_secret)) != ""
+    "clerk-jwt-key"            = trimspace(nonsensitive(var.clerk_jwt_key)) != ""
+    "clerk-jwt-issuer"         = trimspace(nonsensitive(var.clerk_jwt_issuer)) != ""
+    "clerk-publishable-key"    = trimspace(nonsensitive(var.clerk_publishable_key)) != ""
+    "clerk-secret-key"         = trimspace(nonsensitive(var.clerk_secret_key)) != ""
+    "clerk-authorized-parties" = trimspace(nonsensitive(var.clerk_authorized_parties)) != ""
+    "clerk-webhook-secret"     = trimspace(nonsensitive(var.clerk_webhook_secret)) != ""
+    "langfuse-public-key"      = trimspace(nonsensitive(var.langfuse_public_key)) != ""
+    "langfuse-secret-key"      = trimspace(nonsensitive(var.langfuse_secret_key)) != ""
+    "langfuse-host"            = trimspace(var.langfuse_host) != ""
+    "openai-api-key"           = trimspace(nonsensitive(var.openai_api_key)) != ""
+    "resend-api-key"           = trimspace(nonsensitive(var.resend_api_key)) != ""
+    "email-from"               = trimspace(var.email_from) != ""
+    "vertex-project-id"        = trimspace(var.project_id) != ""
+    "vertex-location"          = trimspace(var.vertex_location) != ""
+    "vertex-model"             = trimspace(var.vertex_model) != ""
+  }
+
+  configured_secret_names = toset([
+    for key, is_present in local.secret_value_presence : key
+    if is_present
+  ])
+
+  gateway_openapi_document = templatefile("${path.module}/templates/api-gateway-openapi.yaml.tftpl", {
+    gateway_backend_url = local.gateway_backend_url
+  })
+  gateway_openapi_document_base64 = base64encode(local.gateway_openapi_document)
+  gateway_api_config_id_prefix    = "cfg-${substr(md5(local.gateway_openapi_document), 0, 8)}-"
+
+  backend_secret_envs = {
+    "ADMIN_BOOTSTRAP_SECRET"   = "admin-bootstrap-secret"
+    "CLERK_JWT_KEY"            = "clerk-jwt-key"
+    "CLERK_JWT_ISSUER"         = "clerk-jwt-issuer"
+    "CLERK_PUBLISHABLE_KEY"    = "clerk-publishable-key"
+    "CLERK_AUTHORIZED_PARTIES" = "clerk-authorized-parties"
+    "LANGFUSE_PUBLIC_KEY"      = "langfuse-public-key"
+    "LANGFUSE_SECRET_KEY"      = "langfuse-secret-key"
+    "LANGFUSE_HOST"            = "langfuse-host"
+    "OPENAI_API_KEY"           = "openai-api-key"
+  }
+
+  worker_secret_envs = {
+    "LANGFUSE_PUBLIC_KEY" = "langfuse-public-key"
+    "LANGFUSE_SECRET_KEY" = "langfuse-secret-key"
+    "LANGFUSE_HOST"       = "langfuse-host"
+    "OPENAI_API_KEY"      = "openai-api-key"
+  }
+
   gateway_backend_url = trimsuffix(google_cloud_run_v2_service.backend.uri, "/")
 }
 
@@ -232,14 +281,14 @@ resource "google_secret_manager_secret_version" "database_name" {
 
 resource "google_secret_manager_secret_version" "database_url" {
   secret      = google_secret_manager_secret.app["database-url"].id
-  secret_data = "postgresql+psycopg2://${var.db_user}:${random_password.database_password.result}@/${var.db_name}?host=/cloudsql/${google_sql_database_instance.postgres.connection_name}"
+  secret_data = "postgresql+psycopg2://${urlencode(var.db_user)}:${urlencode(random_password.database_password.result)}@/${var.db_name}?host=/cloudsql/${google_sql_database_instance.postgres.connection_name}"
 }
 
 resource "google_secret_manager_secret_version" "configured" {
-  for_each = local.secret_values
+  for_each = local.configured_secret_names
 
   secret      = google_secret_manager_secret.app[each.key].id
-  secret_data = each.value
+  secret_data = local.secret_values[each.key]
 }
 
 resource "google_secret_manager_secret_iam_member" "backend_access" {
@@ -289,91 +338,23 @@ resource "google_cloud_run_v2_service" "backend" {
       }
 
       env {
-        name = "ADMIN_BOOTSTRAP_SECRET"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.app["admin-bootstrap-secret"].secret_id
-            version = "latest"
-          }
-        }
+        name  = "UNDERLYTICS_DATABASE_URL_SECRET_VERSION"
+        value = google_secret_manager_secret_version.database_url.version
       }
 
-      env {
-        name = "CLERK_JWT_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.app["clerk-jwt-key"].secret_id
-            version = "latest"
-          }
+      dynamic "env" {
+        for_each = {
+          for env_name, secret_name in local.backend_secret_envs : env_name => secret_name
+          if contains(local.configured_secret_names, secret_name)
         }
-      }
 
-      env {
-        name = "CLERK_JWT_ISSUER"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.app["clerk-jwt-issuer"].secret_id
-            version = "latest"
-          }
-        }
-      }
-
-      env {
-        name = "CLERK_PUBLISHABLE_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.app["clerk-publishable-key"].secret_id
-            version = "latest"
-          }
-        }
-      }
-
-      env {
-        name = "CLERK_AUTHORIZED_PARTIES"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.app["clerk-authorized-parties"].secret_id
-            version = "latest"
-          }
-        }
-      }
-
-      env {
-        name = "LANGFUSE_PUBLIC_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.app["langfuse-public-key"].secret_id
-            version = "latest"
-          }
-        }
-      }
-
-      env {
-        name = "LANGFUSE_SECRET_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.app["langfuse-secret-key"].secret_id
-            version = "latest"
-          }
-        }
-      }
-
-      env {
-        name = "LANGFUSE_HOST"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.app["langfuse-host"].secret_id
-            version = "latest"
-          }
-        }
-      }
-
-      env {
-        name = "OPENAI_API_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.app["openai-api-key"].secret_id
-            version = "latest"
+        content {
+          name = env.key
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.app[env.value].secret_id
+              version = "latest"
+            }
           }
         }
       }
@@ -401,6 +382,11 @@ resource "google_cloud_run_v2_service" "backend" {
       env {
         name  = "WORKFLOW_EXECUTION_MODE"
         value = "pubsub"
+      }
+
+      env {
+        name  = "CORS_ALLOWED_ORIGINS"
+        value = var.cors_allowed_origins
       }
 
       volume_mounts {
@@ -451,41 +437,23 @@ resource "google_cloud_run_v2_service" "worker" {
       }
 
       env {
-        name = "LANGFUSE_PUBLIC_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.app["langfuse-public-key"].secret_id
-            version = "latest"
-          }
-        }
+        name  = "UNDERLYTICS_DATABASE_URL_SECRET_VERSION"
+        value = google_secret_manager_secret_version.database_url.version
       }
 
-      env {
-        name = "LANGFUSE_SECRET_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.app["langfuse-secret-key"].secret_id
-            version = "latest"
-          }
+      dynamic "env" {
+        for_each = {
+          for env_name, secret_name in local.worker_secret_envs : env_name => secret_name
+          if contains(local.configured_secret_names, secret_name)
         }
-      }
 
-      env {
-        name = "LANGFUSE_HOST"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.app["langfuse-host"].secret_id
-            version = "latest"
-          }
-        }
-      }
-
-      env {
-        name = "OPENAI_API_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.app["openai-api-key"].secret_id
-            version = "latest"
+        content {
+          name = env.key
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.app[env.value].secret_id
+              version = "latest"
+            }
           }
         }
       }
@@ -573,17 +541,15 @@ resource "google_api_gateway_api" "backend" {
 }
 
 resource "google_api_gateway_api_config" "backend" {
-  provider      = google-beta
-  api           = google_api_gateway_api.backend.api_id
-  api_config_id = "v1"
-  display_name  = "Underlytics backend API config"
+  provider             = google-beta
+  api                  = google_api_gateway_api.backend.api_id
+  api_config_id_prefix = local.gateway_api_config_id_prefix
+  display_name         = "Underlytics backend API config"
 
   openapi_documents {
     document {
-      path = "openapi.yaml"
-      contents = base64encode(templatefile("${path.module}/templates/api-gateway-openapi.yaml.tftpl", {
-        gateway_backend_url = local.gateway_backend_url
-      }))
+      path     = "openapi.yaml"
+      contents = local.gateway_openapi_document_base64
     }
   }
 

@@ -150,3 +150,9 @@ variable "vertex_model" {
   type        = string
   default     = "gemini-2.5-pro"
 }
+
+variable "cors_allowed_origins" {
+  description = "Comma-separated frontend origins allowed by backend CORS."
+  type        = string
+  default     = "http://localhost:3000,http://127.0.0.1:3000,https://underlytics.vercel.app"
+}
