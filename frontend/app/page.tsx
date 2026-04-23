@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { auth } from "@clerk/nextjs/server";
 import {
   ArrowRight,
   BadgeCheck,
@@ -11,6 +10,7 @@ import {
 } from "lucide-react";
 
 import AdminBootstrapPanel from "@/components/admin/admin-bootstrap-panel";
+import { getServerAuth } from "@/lib/auth/server";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { getBackendActor } from "@/lib/api/server-actor";
@@ -85,7 +85,7 @@ function ActionButtons({ userId }: { userId: string | null }) {
 }
 
 export default async function Home() {
-  const { userId } = await auth();
+  const { userId } = await getServerAuth();
   let actorRole: string | null = null;
 
   try {

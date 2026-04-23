@@ -66,7 +66,8 @@ function logClerkMiddlewareState(req: NextRequest, authorizedParties: string[]) 
       requestPath: req.nextUrl.pathname,
       vercelUrl: process.env.VERCEL_URL ?? null,
       tokenAzp: decodeJwtAzp(sessionToken),
-      authorizedParties,
+      candidateAuthorizedParties: authorizedParties,
+      appliesAuthorizedParties: false,
     })
   );
 }
@@ -84,13 +85,13 @@ export default clerkMiddleware(
     }
   },
   (req) => {
-    const authorizedParties = parseAuthorizedParties(req.nextUrl.origin);
+    const candidateAuthorizedParties = parseAuthorizedParties(req.nextUrl.origin);
 
-    logClerkMiddlewareState(req, authorizedParties);
+    logClerkMiddlewareState(req, candidateAuthorizedParties);
 
-    return {
-      authorizedParties,
-    };
+    // Diagnostic mode: remove authorizedParties entirely to confirm whether
+    // the unexpected-party error is coming from this middleware configuration.
+    return {};
   }
 );
 

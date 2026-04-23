@@ -1,13 +1,12 @@
-import { auth, currentUser } from "@clerk/nextjs/server";
-
+import { getServerAuth, getServerCurrentUser } from "@/lib/auth/server";
 import { getLoanProducts } from "@/lib/api/loan-products";
 import { syncUser } from "@/lib/api/users";
 import NewApplicationForm from "@/components/applications/new-application-form";
 import { PageHeader } from "@/components/ui/page-header";
 
 export default async function NewApplicationPage() {
-  const { userId, getToken } = await auth();
-  const clerkUser = await currentUser();
+  const { userId, getToken } = await getServerAuth();
+  const clerkUser = await getServerCurrentUser();
 
   if (!userId || !clerkUser) {
     return (

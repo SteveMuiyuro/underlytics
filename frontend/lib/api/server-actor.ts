@@ -1,8 +1,8 @@
 import "server-only";
 
 import { cache } from "react";
-import { auth, currentUser } from "@clerk/nextjs/server";
 
+import { getServerAuth, getServerCurrentUser } from "@/lib/auth/server";
 import { syncUser } from "@/lib/api/users";
 
 export interface BackendActor {
@@ -11,7 +11,7 @@ export interface BackendActor {
 }
 
 export const getBackendAuthHeaders = cache(async (): Promise<HeadersInit> => {
-  const { userId, getToken } = await auth();
+  const { userId, getToken } = await getServerAuth();
 
   if (!userId) {
     throw new Error("Authenticated actor is required");
@@ -28,8 +28,8 @@ export const getBackendAuthHeaders = cache(async (): Promise<HeadersInit> => {
 });
 
 export const getBackendActor = cache(async (): Promise<BackendActor> => {
-  const { userId } = await auth();
-  const clerkUser = await currentUser();
+  const { userId } = await getServerAuth();
+  const clerkUser = await getServerCurrentUser();
   const authHeaders = await getBackendAuthHeaders();
 
   if (!userId || !clerkUser) {
