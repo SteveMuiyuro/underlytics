@@ -22,7 +22,50 @@ env:
   TF_IN_AUTOMATION: true
 
 jobs:
+  preflight:
+    name: Deployment Preflight
+    runs-on: ubuntu-latest
+    outputs:
+      can_deploy: ${{ steps.check.outputs.can_deploy }}
+
+    steps:
+      - name: Check deployment prerequisites
+        id: check
+        env:
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          GCP_REGION: ${{ vars.GCP_REGION }}
+          GCP_WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
+          GCP_TERRAFORM_SERVICE_ACCOUNT: ${{ vars.GCP_TERRAFORM_SERVICE_ACCOUNT }}
+        run: |
+          missing=()
+
+          [ -n "$GCP_PROJECT_ID" ] || missing+=("GCP_PROJECT_ID")
+          [ -n "$GCP_REGION" ] || missing+=("GCP_REGION")
+          [ -n "$GCP_WIF_PROVIDER" ] || missing+=("GCP_WIF_PROVIDER")
+          [ -n "$GCP_TERRAFORM_SERVICE_ACCOUNT" ] || missing+=("GCP_TERRAFORM_SERVICE_ACCOUNT")
+
+          if [ "${#missing[@]}" -eq 0 ]; then
+            echo "can_deploy=true" >> "$GITHUB_OUTPUT"
+            status="ready"
+            missing_text="none"
+          else
+            echo "can_deploy=false" >> "$GITHUB_OUTPUT"
+            status="blocked"
+            missing_text="${missing[*]}"
+          fi
+
+          {
+            echo "## Backend Deploy Preflight"
+            echo ""
+            echo "- Trigger ref: \`${GITHUB_REF}\`"
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Terraform deploy status: \`${status}\`"
+            echo "- Missing required repository variables: \`${missing_text}\`"
+            echo "- Terraform steps in this workflow: \`terraform init\`, targeted bootstrap \`terraform apply\`, full \`terraform apply\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   verify:
+    name: Verify Backend
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -53,9 +96,12 @@ jobs:
         run: uv run pytest
 
   deploy:
-    if: vars.GCP_PROJECT_ID != '' && vars.GCP_REGION != '' && vars.GCP_WIF_PROVIDER != '' && vars.GCP_TERRAFORM_SERVICE_ACCOUNT != ''
+    name: Deploy Backend Infrastructure
+    if: needs.preflight.outputs.can_deploy == 'true'
     runs-on: ubuntu-latest
-    needs: verify
+    needs:
+      - preflight
+      - verify
     defaults:
       run:
         working-directory: infra/backend

@@ -18,9 +18,55 @@ env:
   TF_IN_AUTOMATION: true
 
 jobs:
-  deploy:
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && vars.VERCEL_PROJECT_ID != '' && vars.VERCEL_ORG_ID != ''
+  preflight:
+    name: Deployment Preflight
     runs-on: ubuntu-latest
+    outputs:
+      can_deploy: ${{ steps.check.outputs.can_deploy }}
+
+    steps:
+      - name: Check deployment prerequisites
+        id: check
+        env:
+          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+        run: |
+          reasons=()
+
+          [ "$WORKFLOW_CONCLUSION" = "success" ] || reasons+=("Frontend CI conclusion is '$WORKFLOW_CONCLUSION'")
+          [ "$HEAD_BRANCH" = "main" ] || reasons+=("head branch is '$HEAD_BRANCH'")
+          [ -n "$VERCEL_PROJECT_ID" ] || reasons+=("VERCEL_PROJECT_ID is missing")
+          [ -n "$VERCEL_ORG_ID" ] || reasons+=("VERCEL_ORG_ID is missing")
+
+          if [ "${#reasons[@]}" -eq 0 ]; then
+            echo "can_deploy=true" >> "$GITHUB_OUTPUT"
+            status="ready"
+            reason_text="none"
+          else
+            echo "can_deploy=false" >> "$GITHUB_OUTPUT"
+            status="blocked"
+            reason_text="${reasons[*]}"
+          fi
+
+          {
+            echo "## Frontend Deploy Preflight"
+            echo ""
+            echo "- Source workflow: \`Frontend CI\`"
+            echo "- Frontend CI conclusion: \`${WORKFLOW_CONCLUSION}\`"
+            echo "- Head branch: \`${HEAD_BRANCH}\`"
+            echo "- Terraform deploy status: \`${status}\`"
+            echo "- Blockers: \`${reason_text}\`"
+            echo "- Terraform steps in this workflow: \`terraform init\`, \`terraform validate\`, \`terraform apply\` in \`infra/frontend\` before Vercel deploy"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Apply Frontend Terraform And Deploy
+    if: needs.preflight.outputs.can_deploy == 'true'
+    runs-on: ubuntu-latest
+    needs:
+      - preflight
     env:
       VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
       VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}

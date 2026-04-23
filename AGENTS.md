@@ -1,47 +1,68 @@
-# AGENT_SYSTEM.md
+# AGENTS.md
 
 ## Purpose
 
-This document defines the architecture, behavior, and responsibilities of the Underlytics agent system.
+This document defines the architecture, behavior, and implementation rules for the Underlytics agent system.
 
-It ensures Codex builds agents correctly using:
-- LLM reasoning (Gemini via Vertex AI)
-- structured outputs
-- strict guardrails
-- deterministic orchestration
+Underlytics is an AI-powered loan underwriting platform. The agent system must be:
 
----
+- explainable
+- auditable
+- deterministic where required
+- modular
+- production-ready
+- safe under failure
+- extensible to external tools (MCP) later
 
-## Core architecture
-
-The system follows a **planner + worker (orchestrator-worker) architecture**.
-
-This is a standard multi-agent pattern where:
-- a planner decomposes tasks
-- workers execute specialized subtasks
-- results are aggregated into a final decision
-
-This pattern improves scalability, specialization, and reliability in complex workflows :contentReference[oaicite:1]{index=1}.
+This document ensures Codex builds agents correctly and does not collapse the system into a single LLM call.
 
 ---
 
-## Agent roles
+## Core Architecture
+
+The system uses a **Planner + Worker (Orchestrator-Worker) architecture**.
+
+Flow:
+
+Application
+→ Planner Agent
+→ Independent Worker Agents
+→ Structured Outputs
+→ Decision Summary Agent
+→ Guardrails
+→ Final Decision
+→ Email Agent
+→ Notification Service
+
+Key principles:
+
+- Each worker operates independently
+- Workers do NOT share hidden state
+- Workers do NOT make final approval decisions
+- The planner orchestrates, not decides
+- Guardrails enforce correctness after LLM output
+
+---
+
+## Agent Roles
 
 ### 1. Planner Agent
 
 Role:
-- orchestrates the workflow
-- decides which agents to run
-- manages execution order
-- tracks job state
+- orchestrates workflow execution
 
 Responsibilities:
 - create job
-- trigger workers
-- monitor completion
-- trigger final decision step
+- trigger worker agents
+- track job state
+- ensure required workers run
+- trigger Decision Summary Agent
+- handle retries/failures
 
-The planner acts as a **central coordinator**, routing tasks to specialized agents.
+Constraints:
+- must NOT approve or reject applications
+- must NOT bypass guardrails
+- must NOT contain business logic decisions
 
 ---
 
@@ -51,93 +72,163 @@ Workers are **specialized evaluators**.
 
 Each worker:
 - receives scoped input
-- performs a specific evaluation
-- returns structured output
-- does NOT make final decisions
+- performs one task
+- returns structured JSON
+- is stateless
+- can run independently (async-ready)
 
-Workers are stateless and focused.
+Workers must:
+- NOT approve/reject applications
+- NOT modify other worker outputs
+- NOT assume other agents’ results unless explicitly passed
 
 ---
 
-## Current worker agents
+## Worker Agents
 
 ### Document Analysis Worker
 
 Purpose:
-- check required documents
+- validate required documents
+
+Inputs:
+- uploaded documents
+- required document list
 
 Outputs:
-- decision: documents_missing / complete
+- decision: documents_complete | documents_missing
 - flags: missing documents
 - reasoning
+- score, confidence
+
+Rules:
+- missing documents → cannot approve
+- unreadable documents → flag
 
 ---
 
 ### Policy Retrieval Worker
 
 Purpose:
-- validate application against product policy
+- validate against loan policy
+
+Inputs:
+- product
+- requested amount
+- term
 
 Outputs:
-- decision: policy_match / mismatch
-- reasoning
+- decision: policy_match | policy_mismatch
 - flags
+- reasoning
+- score, confidence
+
+Rules:
+- mismatch → cannot approve
+- missing policy → manual review
 
 ---
 
 ### Risk Assessment Worker
 
 Purpose:
-- evaluate financial risk
+- evaluate affordability risk
 
 Inputs:
 - income
 - expenses
 - obligations
+- requested loan
 
 Outputs:
-- score
-- decision: low / medium / high
-- flags (e.g. high_dti)
+- decision: low | medium | high
+- flags
 - reasoning
+- score, confidence
+
+Rules:
+- medium → manual review
+- high → reject unless overridden by reviewer
 
 ---
 
 ### Fraud Verification Worker
 
 Purpose:
-- detect fraud indicators
+- detect anomalies
+
+Inputs:
+- application data
+- document metadata
 
 Outputs:
-- decision: clear / suspicious
+- decision: clear | suspicious
 - flags
 - reasoning
+- score, confidence
+
+Rules:
+- suspicious → no auto approval
+- escalate to manual review
 
 ---
 
-### Decision Summary Worker
+### Decision Summary Agent
 
 Purpose:
 - aggregate all worker outputs
-- determine final system decision
+- propose final decision
+
+Inputs:
+- all worker outputs
 
 Outputs:
-- decision: approved / rejected / manual_review
+- decision: approved | rejected | manual_review
 - score
 - reasoning
 - flags
+- inputs_used
+
+Rules:
+- must NOT bypass guardrails
+- must NOT override policy constraints
+- must explain reasoning clearly
 
 ---
 
-## Output contract (MANDATORY)
+### Email Agent
 
-All agents must return structured JSON:
+Purpose:
+- generate applicant-facing communication
+
+Inputs:
+- final decision
+- worker outputs
+- reviewer notes (if any)
+
+Outputs:
+- subject
+- message body
+
+Rules:
+- professional tone
+- no internal jargon
+- no raw system data
+- no hidden reasoning
+
+Email sending is handled by Notification Service (NOT the agent).
+
+---
+
+## Output Contract (MANDATORY)
+
+All agents must return:
 
 ```json
 {
   "score": 0.82,
   "confidence": 0.91,
-  "decision": "low_risk",
+  "decision": "low",
   "flags": ["high_dti"],
-  "reasoning": "DTI ratio is high relative to income."
+  "reasoning": "DTI ratio is elevated."
 }
