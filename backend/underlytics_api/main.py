@@ -10,8 +10,9 @@ from underlytics_api.api.manual_review import router as manual_review_router
 from underlytics_api.api.users import router as users_router
 from underlytics_api.api.workflow import router as workflow_router
 from underlytics_api.core.config import CORS_ALLOWED_ORIGINS
-from underlytics_api.db.database import engine
+from underlytics_api.db.database import SessionLocal, engine
 from underlytics_api.models.base import Base
+from underlytics_api.services.loan_product_service import ensure_default_loan_products
 
 app = FastAPI(title="Underlytics API")
 
@@ -27,6 +28,12 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup():
     Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+
+    try:
+        ensure_default_loan_products(db)
+    finally:
+        db.close()
 
 
 @app.get("/")

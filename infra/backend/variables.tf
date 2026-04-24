@@ -89,7 +89,7 @@ variable "clerk_authorized_parties" {
   description = "Optional comma-separated Clerk authorized parties for backend token validation."
   type        = string
   sensitive   = true
-  default     = ""
+  default     = "http://localhost:3000,https://underlytics.vercel.app,https://underlytics-steve-mwangis-projects.vercel.app,https://underlytics-git-main-steve-mwangis-projects.vercel.app"
 }
 
 variable "clerk_webhook_secret" {

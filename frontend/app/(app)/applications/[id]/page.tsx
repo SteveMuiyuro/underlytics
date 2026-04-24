@@ -246,55 +246,63 @@ export default async function ApplicationDetailPage({
                 {job ? (
                   <>
                     <div className="rounded-[28px] border border-slate-200/80 bg-slate-950 p-6 text-white">
-                      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-3">
-                            <div className="flex size-11 items-center justify-center rounded-2xl bg-white/10">
-                              <Workflow className="size-5 text-cyan-300" />
-                            </div>
-                            <div>
-                              <p className="text-lg font-semibold">Planner Job</p>
-                              <p className="text-sm text-white/65">
-                                Current step: {formatWorkflowStep(job.current_step)}
-                              </p>
+                      <div className="space-y-5">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-3">
+                              <div className="flex size-11 items-center justify-center rounded-2xl bg-white/10">
+                                <Workflow className="size-5 text-cyan-300" />
+                              </div>
+                              <div>
+                                <p className="text-lg font-semibold">Planner Job</p>
+                                <p className="text-sm text-white/65">
+                                  Current step: {formatWorkflowStep(job.current_step)}
+                                </p>
+                              </div>
                             </div>
                           </div>
-                          <div className="flex flex-wrap gap-2">
-                            <StatusBadge tone={plannerStatus.tone}>{plannerStatus.label}</StatusBadge>
-                            <StatusBadge tone="cyan">{completedRuns} completed workers</StatusBadge>
+
+                          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/72">
+                            Planner coordination is tracking each worker run independently and
+                            updating the case timeline in real time.
                           </div>
                         </div>
 
-                        <div className="grid gap-3 sm:grid-cols-3">
-                          <div className="rounded-2xl bg-white/6 px-4 py-3">
+                        <div className="grid gap-3 md:grid-cols-3">
+                          <div className="rounded-2xl bg-white/6 px-4 py-4">
                             <p className="text-xs tracking-[0.18em] text-white/55 uppercase">
                               Retries
                             </p>
                             <p className="mt-2 text-lg font-semibold">{job.retry_count}</p>
                           </div>
-                          <div className="rounded-2xl bg-white/6 px-4 py-3">
+                          <div className="rounded-2xl bg-white/6 px-4 py-4">
                             <p className="text-xs tracking-[0.18em] text-white/55 uppercase">
                               Started
                             </p>
-                            <p className="mt-2 text-sm font-medium text-white/80">
+                            <p className="mt-2 text-sm leading-6 font-medium text-white/80">
                               {job.started_at
                                 ? new Date(job.started_at).toLocaleString()
                                 : "Pending"}
                             </p>
                           </div>
-                          <div className="rounded-2xl bg-white/6 px-4 py-3">
+                          <div className="rounded-2xl bg-white/6 px-4 py-4">
                             <p className="text-xs tracking-[0.18em] text-white/55 uppercase">
                               Updated
                             </p>
-                            <p className="mt-2 text-sm font-medium text-white/80">
+                            <p className="mt-2 text-sm leading-6 font-medium text-white/80">
                               {new Date(job.updated_at).toLocaleString()}
                             </p>
                           </div>
                         </div>
+
+                        <div className="flex flex-wrap items-center gap-2 border-t border-white/10 pt-1">
+                          <StatusBadge tone={plannerStatus.tone}>{plannerStatus.label}</StatusBadge>
+                          <StatusBadge tone="cyan">{completedRuns} completed workers</StatusBadge>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="grid gap-4 lg:grid-cols-2">
+                    <div className="grid gap-4 xl:grid-cols-2">
                       {agentRuns.map((run) => {
                         const output = outputMap.get(run.agent_name);
                         const flags = parseFlags(output?.flags ?? null);
@@ -306,12 +314,12 @@ export default async function ApplicationDetailPage({
                             className="rounded-[28px] border border-slate-200/80 bg-slate-50/80 p-5"
                           >
                             <div className="flex flex-col gap-4">
-                              <div className="flex items-start justify-between gap-4">
-                                <div className="flex items-start gap-3">
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div className="flex min-w-0 items-start gap-3">
                                   <div className="flex size-11 items-center justify-center rounded-2xl bg-white text-indigo-600 shadow-sm">
                                     <Bot className="size-5" />
                                   </div>
-                                  <div>
+                                  <div className="min-w-0">
                                     <p className="font-medium text-slate-950">
                                       {formatAgentName(run.agent_name)}
                                     </p>
@@ -320,13 +328,16 @@ export default async function ApplicationDetailPage({
                                     </p>
                                   </div>
                                 </div>
-                                <StatusBadge tone={workflowStatus.tone}>
+                                <StatusBadge
+                                  tone={workflowStatus.tone}
+                                  className="w-fit shrink-0 self-start"
+                                >
                                   {workflowStatus.label}
                                 </StatusBadge>
                               </div>
 
-                              <div className="grid gap-3 sm:grid-cols-3">
-                                <div className="rounded-[20px] border border-slate-200/80 bg-white p-4">
+                              <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+                                <div className="flex min-h-[102px] flex-col justify-between rounded-[20px] border border-slate-200/80 bg-white p-4">
                                   <p className="text-xs tracking-[0.18em] text-slate-400 uppercase">
                                     Score
                                   </p>
@@ -334,7 +345,7 @@ export default async function ApplicationDetailPage({
                                     {formatPercent(output?.score)}
                                   </p>
                                 </div>
-                                <div className="rounded-[20px] border border-slate-200/80 bg-white p-4">
+                                <div className="flex min-h-[102px] flex-col justify-between rounded-[20px] border border-slate-200/80 bg-white p-4">
                                   <p className="text-xs tracking-[0.18em] text-slate-400 uppercase">
                                     Confidence
                                   </p>
@@ -342,11 +353,11 @@ export default async function ApplicationDetailPage({
                                     {formatPercent(output?.confidence)}
                                   </p>
                                 </div>
-                                <div className="rounded-[20px] border border-slate-200/80 bg-white p-4">
+                                <div className="flex min-h-[102px] flex-col justify-between rounded-[20px] border border-slate-200/80 bg-white p-4 sm:col-span-2 2xl:col-span-1">
                                   <p className="text-xs tracking-[0.18em] text-slate-400 uppercase">
                                     Decision
                                   </p>
-                                  <p className="mt-2 text-lg font-semibold text-slate-950">
+                                  <p className="mt-2 text-base leading-6 font-semibold text-slate-950 sm:text-lg">
                                     {output?.decision ? humanize(output.decision) : "Pending"}
                                   </p>
                                 </div>

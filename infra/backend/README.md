@@ -25,6 +25,7 @@ managed here.
 - `github_repository`: the GitHub repository in `owner/name` form used by Workload Identity Federation. The confirmed value is `SteveMuiyuro/underlytics` without the `.git` suffix.
 - Initial secret values for anything you already have available, especially Clerk and the bootstrap admin secret.
 - `cors_allowed_origins`: comma-separated frontend origins allowed by backend CORS. The default includes local development plus `https://underlytics.vercel.app`.
+- `clerk_authorized_parties`: comma-separated frontend origins allowed by backend Clerk bearer-token validation. The default includes local development plus the current Vercel production aliases.
 
 The Terraform variables and GitHub Actions workflows are intentionally parameterized so the repository slug can be overridden later with a GitHub repository variable if needed.
 
