@@ -40,10 +40,30 @@ def _fallback_structured_output(prompt: AgentPromptDefinition) -> dict[str, Any]
             "planner_mode": "deterministic",
             "summary": "Fallback underwriting plan for test environment.",
             "steps": [
-                {"step_key": "document_analysis", "worker_name": "document_analysis", "priority": 1, "dependencies": []},
-                {"step_key": "policy_retrieval", "worker_name": "policy_retrieval", "priority": 2, "dependencies": []},
-                {"step_key": "risk_assessment", "worker_name": "risk_assessment", "priority": 3, "dependencies": []},
-                {"step_key": "fraud_verification", "worker_name": "fraud_verification", "priority": 4, "dependencies": []},
+                {
+                    "step_key": "document_analysis",
+                    "worker_name": "document_analysis",
+                    "priority": 1,
+                    "dependencies": [],
+                },
+                {
+                    "step_key": "policy_retrieval",
+                    "worker_name": "policy_retrieval",
+                    "priority": 2,
+                    "dependencies": [],
+                },
+                {
+                    "step_key": "risk_assessment",
+                    "worker_name": "risk_assessment",
+                    "priority": 3,
+                    "dependencies": [],
+                },
+                {
+                    "step_key": "fraud_verification",
+                    "worker_name": "fraud_verification",
+                    "priority": 4,
+                    "dependencies": [],
+                },
                 {
                     "step_key": "decision_summary",
                     "worker_name": "decision_summary",
@@ -62,7 +82,10 @@ def _fallback_structured_output(prompt: AgentPromptDefinition) -> dict[str, Any]
     if prompt.agent_name == "email_agent":
         return {
             "subject": "Your loan application update",
-            "html_body": "<p>Your application has been successfully reviewed and approved.</p>",
+            "html_body": (
+                "<p>Your application has been successfully "
+                "reviewed and approved.</p>"
+            ),
         }
 
     # ---------- OTHER AGENTS ----------
@@ -102,10 +125,12 @@ def _run_openai_structured_agent(
         ),
         output_type=output_type,
     )
+
     result = Runner.run_sync(
         agent,
         _build_agent_payload(prompt=prompt, scoped_input=scoped_input),
     )
+
     output = result.final_output_as(output_type, raise_if_incorrect_type=True)
     return output.model_dump(exclude_none=True)
 
@@ -138,7 +163,10 @@ def _run_vertex_structured_agent(
 
     response = client.models.generate_content(
         model=prompt.model_name,
-        contents=_build_agent_payload(prompt=prompt, scoped_input=scoped_input),
+        contents=_build_agent_payload(
+            prompt=prompt,
+            scoped_input=scoped_input,
+        ),
         config=types.GenerateContentConfig(
             system_instruction=prompt.system_prompt,
             temperature=0.15,
@@ -149,16 +177,23 @@ def _run_vertex_structured_agent(
     )
 
     parsed_output = getattr(response, "parsed", None)
+
     if parsed_output is not None:
         if isinstance(parsed_output, BaseModel):
             return parsed_output.model_dump(exclude_none=True)
-        return output_type.model_validate(parsed_output).model_dump(exclude_none=True)
+
+        return output_type.model_validate(parsed_output).model_dump(
+            exclude_none=True
+        )
 
     response_text = getattr(response, "text", None)
+
     if not response_text:
         raise RuntimeError("No structured output from Vertex")
 
-    return output_type.model_validate_json(response_text).model_dump(exclude_none=True)
+    return output_type.model_validate_json(response_text).model_dump(
+        exclude_none=True
+    )
 
 
 def run_structured_agent(
@@ -181,4 +216,6 @@ def run_structured_agent(
             output_type=output_type,
         )
 
-    raise ValueError(f"Unsupported model provider '{prompt.model_provider}'")
+    raise ValueError(
+        f"Unsupported model provider '{prompt.model_provider}'"
+    )
