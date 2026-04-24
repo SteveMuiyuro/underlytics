@@ -28,6 +28,7 @@ ALLOWED_DOCUMENT_TYPES = {"id_document", "payslip", "bank_statement"}
 async def upload_document(
     application_id: str = Form(...),
     document_type: str = Form(...),
+    trigger_workflow: bool = Form(True),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     actor: ActorContext = Depends(get_actor_context),
@@ -94,6 +95,7 @@ async def upload_document(
     db.commit()
     db.refresh(document)
 
-    dispatch_underwriting_workflow(db, application.id)
+    if trigger_workflow:
+        dispatch_underwriting_workflow(db, application.id)
 
     return document

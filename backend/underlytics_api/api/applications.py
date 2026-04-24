@@ -210,6 +210,7 @@ def create_application(
     db.commit()
     db.refresh(application)
 
-    dispatch_underwriting_workflow(db, application.id)
+    if payload.auto_start_workflow:
+        dispatch_underwriting_workflow(db, application.id)
 
     return application

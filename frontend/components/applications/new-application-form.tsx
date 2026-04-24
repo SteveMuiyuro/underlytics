@@ -1,10 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BanknoteArrowDown, BriefcaseBusiness, Building2, FileCheck2 } from "lucide-react";
+import {
+  BanknoteArrowDown,
+  BriefcaseBusiness,
+  Building2,
+  FileCheck2,
+  ShieldCheck,
+} from "lucide-react";
 
 import { createApplication } from "@/lib/api/create-application";
+import { uploadDocument } from "@/lib/api/documents";
 import { ApiLoanProduct } from "@/lib/types/api-loan-product";
 import { formatCurrency } from "@/lib/underlytics-ui";
 import { Button } from "@/components/ui/button";
@@ -100,6 +107,25 @@ export default function NewApplicationForm({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [documentFiles, setDocumentFiles] = useState<{
+    id_document: File | null;
+    payslip: File | null;
+    bank_statement: File | null;
+  }>({
+    id_document: null,
+    payslip: null,
+    bank_statement: null,
+  });
+
+  const fileInputRefs = useRef<{
+    id_document: HTMLInputElement | null;
+    payslip: HTMLInputElement | null;
+    bank_statement: HTMLInputElement | null;
+  }>({
+    id_document: null,
+    payslip: null,
+    bank_statement: null,
+  });
 
   const selectedProduct =
     loanProducts.find((product) => product.id === formData.loan_product_id) ?? null;
@@ -108,11 +134,28 @@ export default function NewApplicationForm({
   const monthlyExpenses = Number(formData.monthly_expenses || 0);
   const obligations = Number(formData.existing_loan_obligations || 0);
   const monthlyBuffer = Math.max(monthlyIncome - monthlyExpenses - obligations, 0);
+  const selectedDocumentCount = Object.values(documentFiles).filter(Boolean).length;
+  const missingDocumentLabels = [
+    !documentFiles.id_document ? "ID Document" : null,
+    !documentFiles.payslip ? "Payslip" : null,
+    !documentFiles.bank_statement ? "Bank Statement" : null,
+  ].filter(Boolean) as string[];
+  const allRequiredDocumentsSelected = missingDocumentLabels.length === 0;
 
   function updateField(name: string, value: string) {
     setFormData((prev) => ({
       ...prev,
       [name]: value,
+    }));
+  }
+
+  function updateDocumentFile(
+    documentType: "id_document" | "payslip" | "bank_statement",
+    file: File | null
+  ) {
+    setDocumentFiles((prev) => ({
+      ...prev,
+      [documentType]: file,
     }));
   }
 
@@ -135,12 +178,57 @@ export default function NewApplicationForm({
         employer_name: formData.employer_name,
         bank_name: formData.bank_name,
         account_type: formData.account_type,
+        auto_start_workflow: false,
       });
+
+      const uploads: Array<{
+        documentType: "id_document" | "payslip" | "bank_statement";
+        file: File;
+        triggerWorkflow: boolean;
+      }> = [
+        {
+          documentType: "id_document",
+          file: documentFiles.id_document as File,
+          triggerWorkflow: false,
+        },
+        {
+          documentType: "payslip",
+          file: documentFiles.payslip as File,
+          triggerWorkflow: false,
+        },
+        {
+          documentType: "bank_statement",
+          file: documentFiles.bank_statement as File,
+          triggerWorkflow: true,
+        },
+      ];
+
+      for (const upload of uploads) {
+        await uploadDocument({
+          applicationId: application.id,
+          documentType: upload.documentType,
+          file: upload.file,
+          triggerWorkflow: upload.triggerWorkflow,
+        });
+      }
+
+      setDocumentFiles({
+        id_document: null,
+        payslip: null,
+        bank_statement: null,
+      });
+      for (const input of Object.values(fileInputRefs.current)) {
+        if (input) {
+          input.value = "";
+        }
+      }
 
       router.push(`/applications/${application.application_number}/processing`);
       router.refresh();
     } catch {
-      setError("Something went wrong while creating the application.");
+      setError(
+        "Something went wrong while submitting the application or uploading documents."
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -420,7 +508,8 @@ export default function NewApplicationForm({
             <CardHeader className="border-b border-slate-200/70 py-6">
               <CardTitle>Supporting Documents</CardTitle>
               <CardDescription>
-                Document upload is completed after the application is created.
+                Choose any supporting documents now. Selected files are uploaded
+                automatically right after the application record is created.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 py-6">
@@ -429,11 +518,29 @@ export default function NewApplicationForm({
                   <div className="flex size-11 items-center justify-center rounded-2xl bg-white text-indigo-600 shadow-sm">
                     <FileCheck2 className="size-5" />
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="font-medium text-slate-900">ID Document</p>
                     <p className="mt-1 text-sm leading-6 text-slate-500">
-                      Upload a government-issued identification document after the case is created.
+                      Add a government-issued identification document for document validation.
                     </p>
+                    <div className="mt-4 space-y-3">
+                      <input
+                        ref={(node) => {
+                          fileInputRefs.current.id_document = node;
+                        }}
+                        type="file"
+                        onChange={(e) =>
+                          updateDocumentFile("id_document", e.target.files?.[0] ?? null)
+                        }
+                        className="block w-full rounded-2xl border border-white bg-white px-4 py-3 text-sm text-slate-600 shadow-xs"
+                      />
+                      {documentFiles.id_document ? (
+                        <div className="flex items-center gap-2 text-sm text-slate-600">
+                          <ShieldCheck className="size-4 text-emerald-600" />
+                          <p className="truncate">Selected: {documentFiles.id_document.name}</p>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -443,11 +550,29 @@ export default function NewApplicationForm({
                   <div className="flex size-11 items-center justify-center rounded-2xl bg-white text-cyan-700 shadow-sm">
                     <BriefcaseBusiness className="size-5" />
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="font-medium text-slate-900">Payslip</p>
                     <p className="mt-1 text-sm leading-6 text-slate-500">
                       Provide the latest earnings evidence to support income validation.
                     </p>
+                    <div className="mt-4 space-y-3">
+                      <input
+                        ref={(node) => {
+                          fileInputRefs.current.payslip = node;
+                        }}
+                        type="file"
+                        onChange={(e) =>
+                          updateDocumentFile("payslip", e.target.files?.[0] ?? null)
+                        }
+                        className="block w-full rounded-2xl border border-white bg-white px-4 py-3 text-sm text-slate-600 shadow-xs"
+                      />
+                      {documentFiles.payslip ? (
+                        <div className="flex items-center gap-2 text-sm text-slate-600">
+                          <ShieldCheck className="size-4 text-emerald-600" />
+                          <p className="truncate">Selected: {documentFiles.payslip.name}</p>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -457,11 +582,34 @@ export default function NewApplicationForm({
                   <div className="flex size-11 items-center justify-center rounded-2xl bg-white text-emerald-700 shadow-sm">
                     <Building2 className="size-5" />
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="font-medium text-slate-900">Bank Statement</p>
                     <p className="mt-1 text-sm leading-6 text-slate-500">
-                      The document center becomes available immediately after submission.
+                      Add a recent bank statement so underwriting can verify repayment capacity.
                     </p>
+                    <div className="mt-4 space-y-3">
+                      <input
+                        ref={(node) => {
+                          fileInputRefs.current.bank_statement = node;
+                        }}
+                        type="file"
+                        onChange={(e) =>
+                          updateDocumentFile(
+                            "bank_statement",
+                            e.target.files?.[0] ?? null
+                          )
+                        }
+                        className="block w-full rounded-2xl border border-white bg-white px-4 py-3 text-sm text-slate-600 shadow-xs"
+                      />
+                      {documentFiles.bank_statement ? (
+                        <div className="flex items-center gap-2 text-sm text-slate-600">
+                          <ShieldCheck className="size-4 text-emerald-600" />
+                          <p className="truncate">
+                            Selected: {documentFiles.bank_statement.name}
+                          </p>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -511,7 +659,9 @@ export default function NewApplicationForm({
                 <div className="rounded-[22px] border border-slate-200/80 bg-slate-50/80 p-4">
                   <p className="text-slate-500">Document center</p>
                   <p className="mt-2 text-lg font-semibold text-slate-900">
-                    Opens after submit
+                    {allRequiredDocumentsSelected
+                      ? "All required files ready"
+                      : `${selectedDocumentCount}/3 files selected`}
                   </p>
                 </div>
               </div>
@@ -549,9 +699,22 @@ export default function NewApplicationForm({
             </FormMessage>
           ) : null}
 
+          {!allRequiredDocumentsSelected ? (
+            <FormMessage className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
+              Upload all required documents before submission:{" "}
+              {missingDocumentLabels.join(", ")}.
+            </FormMessage>
+          ) : null}
+
           <div className="flex flex-col gap-3">
-            <Button type="submit" className="h-11 w-full rounded-2xl" disabled={isSubmitting}>
-              {isSubmitting ? "Submitting..." : "Submit Application"}
+            <Button
+              type="submit"
+              className="h-11 w-full rounded-2xl"
+              disabled={isSubmitting || !allRequiredDocumentsSelected}
+            >
+              {isSubmitting
+                ? "Submitting and Starting Evaluation..."
+                : "Submit Application"}
             </Button>
 
             <Button type="button" variant="outline" className="h-11 w-full rounded-2xl" disabled>

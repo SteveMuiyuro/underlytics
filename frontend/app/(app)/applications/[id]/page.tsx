@@ -17,7 +17,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import DocumentUploadCard from "@/components/applications/document-upload-card";
 import {
   Card,
   CardContent,
@@ -431,38 +430,17 @@ export default async function ApplicationDetailPage({
 
             <Card className="page-surface py-0">
               <CardHeader className="border-b border-slate-200/70 py-6">
-                <CardTitle>Document Center</CardTitle>
+                <CardTitle>Submitted Documents</CardTitle>
                 <CardDescription>
-                  Upload required evidence and review the files already attached to this application.
+                  Review the files that were submitted with this application.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-5 py-6">
-                <div className="grid gap-4">
-                  <DocumentUploadCard
-                    applicationId={application.id}
-                    documentType="id_document"
-                    title="ID Document"
-                    description="Upload a government-issued identification document."
-                  />
-                  <DocumentUploadCard
-                    applicationId={application.id}
-                    documentType="payslip"
-                    title="Payslip"
-                    description="Upload the most recent payslip used for income verification."
-                  />
-                  <DocumentUploadCard
-                    applicationId={application.id}
-                    documentType="bank_statement"
-                    title="Bank Statement"
-                    description="Upload the latest bank statement for transaction and obligation analysis."
-                  />
-                </div>
-
                 <div className="space-y-4">
                   <div className="flex items-center justify-between gap-4">
                     <div>
                       <h3 className="text-lg font-semibold text-slate-950">
-                        Uploaded Documents
+                        Document Inventory
                       </h3>
                       <p className="text-sm text-slate-500">
                         Files already available to workers and reviewers.

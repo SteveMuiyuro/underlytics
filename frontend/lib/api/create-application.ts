@@ -13,6 +13,7 @@ export interface CreateApplicationPayload {
   employer_name?: string;
   bank_name?: string;
   account_type?: string;
+  auto_start_workflow?: boolean;
 }
 
 export async function createApplication(
