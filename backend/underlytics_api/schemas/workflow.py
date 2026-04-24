@@ -3,6 +3,23 @@ from datetime import datetime
 from pydantic import BaseModel
 
 
+class WorkflowStatusAgentResponse(BaseModel):
+    name: str
+    label: str
+    status: str
+    snippet: str
+    reasoning: str | None = None
+    decision: str | None = None
+
+
+class WorkflowStatusResponse(BaseModel):
+    application_number: str
+    status: str
+    progress: int
+    current_stage: str
+    agents: list[WorkflowStatusAgentResponse]
+
+
 class UnderwritingJobResponse(BaseModel):
     id: str
     application_id: str

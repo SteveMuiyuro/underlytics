@@ -26,14 +26,14 @@ class ResendProvider:
         *,
         to_email: str,
         subject: str,
-        body_text: str,
+        html_body: str,
     ) -> EmailDeliveryResult:
         payload = json.dumps(
             {
                 "from": self.email_from,
                 "to": [to_email],
                 "subject": subject,
-                "text": body_text,
+                "html": html_body,
             }
         ).encode("utf-8")
         request = Request(

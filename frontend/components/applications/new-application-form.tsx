@@ -122,7 +122,7 @@ export default function NewApplicationForm({
     setIsSubmitting(true);
 
     try {
-      await createApplication({
+      const application = await createApplication({
         applicant_user_id: formData.applicant_user_id,
         loan_product_id: formData.loan_product_id,
         requested_amount: Number(formData.requested_amount),
@@ -137,7 +137,7 @@ export default function NewApplicationForm({
         account_type: formData.account_type,
       });
 
-      router.push("/applications");
+      router.push(`/applications/${application.application_number}/processing`);
       router.refresh();
     } catch {
       setError("Something went wrong while creating the application.");

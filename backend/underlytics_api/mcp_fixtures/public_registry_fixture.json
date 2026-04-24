@@ -1,0 +1,26 @@
+[
+  {
+    "lookup_key": "Acme Ltd",
+    "registered_name": "Acme Ltd",
+    "status": "active",
+    "entity_type": "private_company",
+    "jurisdiction": "KE",
+    "website_domain": "acme.co.ke"
+  },
+  {
+    "lookup_key": "Bluewave Co",
+    "registered_name": "Bluewave Co",
+    "status": "active",
+    "entity_type": "private_company",
+    "jurisdiction": "KE",
+    "website_domain": "bluewave.co.ke"
+  },
+  {
+    "lookup_key": "John Ventures",
+    "registered_name": "John Ventures",
+    "status": "active",
+    "entity_type": "sole_proprietorship",
+    "jurisdiction": "KE",
+    "website_domain": "johnventures.co.ke"
+  }
+]

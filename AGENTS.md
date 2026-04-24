@@ -50,6 +50,29 @@ Codex must preserve these rules:
 
 ---
 
+# Provider Architecture
+
+Underlytics should use a provider-agnostic agent runtime.
+
+Target provider split:
+
+- `planner` → Vertex AI `gemini-2.5-flash`
+- `document_analysis` → Vertex AI `gemini-2.5-flash`
+- `policy_retrieval` → Vertex AI `gemini-2.5-flash`
+- `risk_assessment` → Vertex AI `gemini-2.5-flash`
+- `fraud_verification` → Vertex AI `gemini-2.5-flash`
+- `decision_summary` → OpenAI `gpt-5.4`
+- `email_agent` → Vertex AI `gemini-2.5-flash-lite` or OpenAI `gpt-5.4-mini`
+
+Rules:
+
+- Keep the runtime provider-agnostic so models can be swapped without rewriting workflow logic.
+- Use Vertex AI as the default platform for orchestration and specialist workers.
+- Use OpenAI for the Decision Summary Agent unless evaluation data shows a clearly better alternative.
+- Do not let model-provider choice alter the output contract, guardrails, or audit trail.
+- Do not silently fall back to deterministic agent reasoning once a live agent path is enabled.
+- If an agent call fails, retry within policy or route to manual review / workflow failure.
+
 # 2. Required Agent Identifiers
 
 Use these stable identifiers everywhere:
@@ -328,7 +351,7 @@ All evaluation agents must return valid JSON using this shape:
 
 # 6. Guardrails
 
-Guardrails must run after every deterministic or LLM-backed agent output.
+Guardrails must run after every agent output.
 
 ## Hard Guardrails
 
@@ -348,39 +371,48 @@ Guardrails always override LLM output.
 
 # 7. LLM Implementation Strategy
 
-Primary LLM platform:
+The target architecture is hybrid.
+
+Primary orchestration platform:
 
 ```text
 Vertex AI
 ```
 
-Primary model:
+Primary worker model family:
 
 ```text
-Gemini
+Gemini 2.5
 ```
 
-## Implementation Order
+Decision synthesis model:
 
-Codex must convert agents gradually in this order:
+```text
+OpenAI gpt-5.4
+```
 
-1. Email Agent.
-2. Decision Summary Agent.
-3. Risk Assessment Worker.
-4. Policy Retrieval Worker.
-5. Document Analysis Worker.
-6. Fraud Verification Worker.
+## Runtime Requirements
 
-Do not convert all agents to LLMs at once.
-
-Each LLM-backed agent must:
+Each live agent path must:
 
 - Use the same structured output contract.
 - Pass guardrail validation.
-- Have deterministic fallback behavior.
-- Log model name and version.
+- Log provider, model name, and model version when available.
 - Log prompt version.
+- Fail safely without silent deterministic substitution.
 - Never directly approve applications without guardrails.
+
+## Implementation Order
+
+Codex should implement the hybrid architecture in this order:
+
+1. Add a provider-agnostic agent runtime abstraction.
+2. Move `planner` to Vertex AI.
+3. Move `document_analysis`, `policy_retrieval`, `risk_assessment`, and `fraud_verification` to Vertex AI.
+4. Move `decision_summary` to OpenAI `gpt-5.4`.
+5. Keep guardrails deterministic and provider-independent.
+6. Decide the `email_agent` provider after evaluation results.
+7. Add MCP-backed workers only after the core runtime and evaluation harness are stable.
 
 ---
 
@@ -425,6 +457,69 @@ Prompts must instruct agents to:
 - lower confidence when uncertain
 - escalate uncertainty to manual review
 - never expose internal system details
+
+## Prompt Requirements
+
+Each prompt file must also declare:
+
+- `provider`
+- `model`
+- `prompt_version`
+- `allowed_tools`
+- `supports_mcp`
+
+Prompt instructions must clearly distinguish:
+
+- deterministic input features supplied by the system
+- tool-fetched evidence supplied through MCP
+- facts the agent is not allowed to invent
+
+Prompts must tell agents to prefer provided policy inputs and computed features over free-form reasoning.
+
+## Decision Reference Pack
+
+Agents must not make underwriting decisions from prompt text alone.
+
+Every worker should receive a governed decision reference pack made up of:
+
+- typed application data
+- deterministic derived metrics
+- product and policy constraints
+- explicit escalation thresholds
+- any approved MCP evidence for that worker
+
+Examples:
+
+- `risk_assessment` should receive derived affordability metrics such as DTI, disposable income, and repayment ratio.
+- `policy_retrieval` should receive product rules, caps, exclusions, and versioned policy references.
+- `document_analysis` should receive required-document matrices and document metadata.
+- `fraud_verification` should receive normalized anomaly signals, not raw unsupported guesses.
+
+Agents interpret the reference pack. They do not invent the reference pack.
+
+## Evaluation Requirements
+
+Underlytics must maintain evaluation metrics before broad rollout.
+
+Minimum tracked metrics:
+
+- worker schema-valid output rate
+- guardrail override rate
+- manual-review precision and recall
+- decision agreement with human reviewers
+- confidence calibration
+- latency per agent
+- cost per application
+- reasoning completeness / citation quality where applicable
+
+Worker-specific metrics:
+
+- `document_analysis`: missing-document recall, unreadable-document precision
+- `policy_retrieval`: policy mismatch precision/recall, policy citation correctness
+- `risk_assessment`: agreement with gold affordability band, calibration by score bucket
+- `fraud_verification`: suspicious-case recall, false escalation rate
+- `decision_summary`: agreement with adjudicated outcome, illegal-approval rate
+- `email_agent`: factual consistency, tone compliance, sensitive-data leakage rate
 
 ---
 
@@ -961,25 +1056,68 @@ After manual review completion:
 
 # 23. MCP Strategy
 
-MCP is not required for v1.
+MCP is a staged capability, not a default dependency.
 
-Do not use MCP for email sending.
+Do not use MCP for:
 
-MCP may be added later for:
+- email sending
+- final decision synthesis
+- unrestricted planner research
 
-- Playwright or browser research.
-- Trusted policy lookup.
-- Fraud intelligence checks.
-- Business registry checks.
-- OCR or document parsing.
+## Initial MCP Policy
 
-Future MCP rules:
+The first MCP rollout should stay on free or keyless tooling where possible.
+
+Preferred initial MCPs:
+
+- internal policy / product knowledgebase MCP
+- read-only filesystem or document MCP for internal policy artifacts
+- browser / Playwright MCP against trusted public sources
+- public business-registry lookups where no paid API is required
+
+These can usually be introduced without paid API keys.
+
+## MCP Candidates by Agent
+
+Good early MCP candidates:
+
+- `policy_retrieval`
+- `fraud_verification`
+
+Possible later MCP candidates:
+
+- `document_analysis`
+- `risk_assessment`
+
+Agents that should not directly use MCP in normal operation:
+
+- `decision_summary`
+- `email_agent`
+
+Planner MCP use should be limited to orchestration metadata, not substantive underwriting evidence.
+
+## MCP Rules
 
 - Tools must be read-only at first.
-- Tool results are supporting evidence only.
+- Tool outputs are supporting evidence only.
+- MCP evidence must be normalized into worker inputs before final synthesis.
 - External data must not directly approve or reject applications.
-- All tool outputs must pass guardrails.
 - Browser tools should only access trusted sources.
+- Every tool call must be logged with source and timestamp.
+- Paid MCP/API integrations must be explicitly approved before implementation.
+
+## Likely Paid Integrations Later
+
+These usually require API keys or commercial contracts:
+
+- credit bureau data
+- KYC / identity verification
+- sanctions / PEP screening
+- bank statement enrichment
+- device intelligence
+- commercial fraud feeds
+
+Codex must call out these requirements before implementation.
 
 ---
 
@@ -1073,6 +1211,7 @@ Codex must not:
 - Return unstructured text as the primary agent output.
 - Use MCP everywhere by default.
 - Use MCP for email sending in v1.
+- Let `decision_summary` fetch outside evidence directly in normal operation.
 - Send email directly from an LLM agent.
 - Expose prompts, secrets, tokens, raw JSON, or raw internal logs to users.
 - Remove manual review flow.
@@ -1080,7 +1219,7 @@ Codex must not:
 - Break existing authentication.
 - Break existing backend integration.
 - Redesign the whole UI unnecessarily.
-- Remove existing working deterministic logic.
+- Remove deterministic guardrails or governed policy inputs.
 
 ---
 
@@ -1088,23 +1227,17 @@ Codex must not:
 
 Codex should implement in this order:
 
-1. Preserve current deterministic agents.
-2. Confirm existing planner-worker workflow.
-3. Add or fix workflow status persistence.
-4. Add `GET /api/applications/{application_number}/workflow-status`.
-5. Add processing route after application submission.
-6. Build processing UI with progress bar and agent cards.
-7. Redirect to detail page only after final decision is ready.
-8. Improve Planner Workflow and worker card alignment on the detail page.
-9. Add prompt files and prompt versioning.
-10. Add Gemini / Vertex AI client abstraction.
-11. Convert Email Agent first.
-12. Add Resend Notification Service.
-13. Add communication logs.
-14. Convert Decision Summary Agent second.
-15. Add Langfuse tracing.
-16. Expand LLM usage gradually.
-17. Add MCP abstraction later only when justified.
+1. Keep the planner-worker workflow and deterministic guardrails intact.
+2. Confirm workflow status persistence and processing-page UX.
+3. Add prompt files, provider metadata, and prompt versioning.
+4. Add a provider-agnostic runtime abstraction.
+5. Move planner and specialist workers to Vertex AI.
+6. Move `decision_summary` to OpenAI `gpt-5.4`.
+7. Preserve Notification Service ownership of email sending.
+8. Add evaluation datasets, regression checks, and guardrail reporting.
+9. Add Langfuse tracing for provider/model/tool metadata.
+10. Add MCP abstraction later only when justified by evaluation results.
+11. Start MCP with `policy_retrieval` and `fraud_verification` using free or keyless sources first.
 
 ---
 

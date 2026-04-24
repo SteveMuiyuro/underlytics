@@ -8,6 +8,7 @@ dependencies = [
     "alembic>=1.16.5",
     "cryptography>=45.0.0",
     "fastapi>=0.136.0",
+    "google-genai>=1.30.0",
     "google-cloud-pubsub>=2.31.1",
     "langfuse>=4.5.0",
     "openai-agents>=0.14.4",

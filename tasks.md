@@ -9,7 +9,7 @@ Current stack:
 - Auth: Clerk in frontend, backend auth still needs to be enforced
 - Current workflow: synchronous, in-process worker execution with persisted runs and outputs
 - Target workflow: planner + orchestrator + autonomous workers + hard guardrails + human review
-- Target model platform: Gemini on Vertex AI first, optional Claude on Vertex later
+- Target model platform: Vertex AI Gemini for planner and specialist workers, OpenAI for decision synthesis
 
 ---
 
@@ -52,6 +52,8 @@ These rules should remain true as development continues:
 6. Maintain support for human-in-the-loop review and overrides.
 7. Keep orchestration state in the database so runs are observable and recoverable.
 8. Prefer incremental migration from the current implementation over a rewrite.
+9. Keep the agent runtime provider-agnostic.
+10. Add MCP only where external evidence materially improves a specialist worker.
 
 ---
 
@@ -94,7 +96,7 @@ This contract should remain the standard for both deterministic and LLM-backed w
 The planner should be responsible for:
 - deciding which steps are required for this application
 - setting execution order and dependencies
-- choosing deterministic vs LLM-backed worker mode
+- choosing the correct provider-backed worker path
 - routing to manual review when prerequisites are missing
 - generating a concise planner summary for the UI and audit trail
 

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
 from sqlalchemy.orm import Session
 
+from underlytics_api.agents.prompts import EMAIL_AGENT_PROMPT
 from underlytics_api.core.config import EMAIL_FROM, RESEND_API_KEY
 from underlytics_api.models.agent_output import AgentOutput
 from underlytics_api.models.application import Application
@@ -13,10 +15,20 @@ from underlytics_api.models.communication_log import CommunicationLog
 from underlytics_api.models.manual_review_action import ManualReviewAction
 from underlytics_api.models.manual_review_case import ManualReviewCase
 from underlytics_api.models.user import User
+from underlytics_api.schemas.agent_execution import EmailAgentOutput
 from underlytics_api.services.providers.resend_provider import (
     EmailDeliveryResult,
     ResendProvider,
 )
+from underlytics_api.services.underwriting_agent_service import _run_structured_agent
+
+EMAIL_TYPES = {
+    "agent_final_approved",
+    "agent_final_rejected",
+    "manual_review_escalated",
+    "manual_review_final_approved",
+    "manual_review_final_rejected",
+}
 
 
 class EmailProvider(Protocol):
@@ -28,8 +40,16 @@ class EmailProvider(Protocol):
         *,
         to_email: str,
         subject: str,
-        body_text: str,
+        html_body: str,
     ) -> EmailDeliveryResult: ...
+
+
+@dataclass
+class ApplicationEmailContext:
+    application: Application
+    applicant: User
+    agent_outputs: list[AgentOutput]
+    decision_output: AgentOutput | None
 
 
 def _coerce_flags(raw_flags: str | None) -> list[str]:
@@ -44,21 +64,67 @@ def _coerce_flags(raw_flags: str | None) -> list[str]:
     if not isinstance(decoded, list):
         return []
 
-    return [str(flag) for flag in decoded if flag]
+    return [str(flag).replace("_", " ") for flag in decoded if flag]
 
 
-def _get_email_provider() -> EmailProvider | None:
+def _normalize_sentence(value: str | None, fallback: str) -> str:
+    normalized = " ".join((value or "").strip().split())
+    if not normalized:
+        return fallback
+    return normalized
+
+
+def _applicant_safe_reasoning(
+    *,
+    decision_output: AgentOutput | None,
+    fallback: str,
+) -> str:
+    if not decision_output or not decision_output.reasoning:
+        return fallback
+
+    reasoning = decision_output.reasoning.replace("_", " ")
+    for term in ("guardrail", "agent", "workflow", "retry", "trace", "json", "llm"):
+        reasoning = reasoning.replace(term, "review")
+        reasoning = reasoning.replace(term.title(), "Review")
+        reasoning = reasoning.replace(term.upper(), "REVIEW")
+
+    return _normalize_sentence(reasoning, fallback)
+
+
+def _manual_review_summary(
+    *,
+    final_decision: str,
+    reviewer_note: str | None,
+) -> str:
+    if final_decision == "approved":
+        fallback = (
+            "A reviewer completed an additional review of your application and confirmed "
+            "that it can move forward."
+        )
+    else:
+        fallback = (
+            "A reviewer completed an additional review of your application and confirmed "
+            "that we cannot approve it at this time."
+        )
+
+    if not reviewer_note:
+        return fallback
+
+    return fallback
+
+
+def _build_email_provider() -> EmailProvider | None:
     if not RESEND_API_KEY or not EMAIL_FROM:
         return None
 
     return ResendProvider(api_key=RESEND_API_KEY, email_from=EMAIL_FROM)
 
 
-def _load_application_context(
+def _load_application_email_context(
     db: Session,
     *,
     application_id: str,
-) -> tuple[Application, User, AgentOutput | None]:
+) -> ApplicationEmailContext:
     application = db.query(Application).filter(Application.id == application_id).first()
     if not application:
         raise ValueError("Application not found for notification")
@@ -67,29 +133,35 @@ def _load_application_context(
     if not applicant:
         raise ValueError("Applicant user not found for notification")
 
-    decision_output = (
+    agent_outputs = (
         db.query(AgentOutput)
-        .filter(
-            AgentOutput.application_id == application.id,
-            AgentOutput.agent_name == "decision_summary",
-        )
+        .filter(AgentOutput.application_id == application.id)
         .order_by(AgentOutput.created_at.desc())
-        .first()
+        .all()
+    )
+    decision_output = next(
+        (output for output in agent_outputs if output.agent_name == "decision_summary"),
+        None,
     )
 
-    return application, applicant, decision_output
+    return ApplicationEmailContext(
+        application=application,
+        applicant=applicant,
+        agent_outputs=agent_outputs,
+        decision_output=decision_output,
+    )
 
 
 def _existing_sent_log(
     db: Session,
     *,
     application_id: str,
-    template_key: str,
+    email_type: str,
     manual_review_case_id: str | None = None,
 ) -> CommunicationLog | None:
     query = db.query(CommunicationLog).filter(
         CommunicationLog.application_id == application_id,
-        CommunicationLog.template_key == template_key,
+        CommunicationLog.template_key == email_type,
         CommunicationLog.status == "sent",
     )
     if manual_review_case_id:
@@ -100,38 +172,85 @@ def _existing_sent_log(
     return query.order_by(CommunicationLog.created_at.desc()).first()
 
 
-def _create_log(
+def generate_application_email(
     *,
+    application: Application,
+    agent_outputs: list[AgentOutput],
+    email_type: str,
+    reviewer_note: str | None = None,
+    reviewer_decision: str | None = None,
+) -> dict[str, str]:
+    if email_type not in EMAIL_TYPES:
+        raise ValueError(f"Unsupported email type '{email_type}'")
+
+    decision_output = next(
+        (output for output in agent_outputs if output.agent_name == "decision_summary"),
+        None,
+    )
+    flags = _coerce_flags(decision_output.flags if decision_output else None)
+    email_context = {
+        "application": {
+            "application_number": application.application_number,
+            "requested_amount": application.requested_amount,
+            "requested_term_months": application.requested_term_months,
+            "status": application.status,
+        },
+        "email_type": email_type,
+        "reviewer_decision": reviewer_decision,
+        "reviewer_note": reviewer_note,
+        "decision_summary": {
+            "decision": decision_output.decision if decision_output else None,
+            "reasoning": _applicant_safe_reasoning(
+                decision_output=decision_output,
+                fallback="The application has been reviewed.",
+            ),
+            "flags": flags,
+        },
+        "manual_review_summary": _manual_review_summary(
+            final_decision=reviewer_decision or application.status,
+            reviewer_note=reviewer_note,
+        ),
+    }
+    email_output = _run_structured_agent(
+        prompt=EMAIL_AGENT_PROMPT,
+        scoped_input=email_context,
+        output_type=EmailAgentOutput,
+    )
+    structured_email = EmailAgentOutput.model_validate(email_output)
+    return structured_email.model_dump()
+
+
+def send_application_email(
+    *,
+    db: Session,
     application_id: str,
-    manual_review_case_id: str | None,
-    recipient_email: str,
-    template_key: str,
+    to_email: str,
     subject: str,
-    body_text: str,
-    metadata: dict,
+    html_body: str,
+    email_type: str,
+    manual_review_case_id: str | None = None,
+    metadata: dict | None = None,
 ) -> CommunicationLog:
-    return CommunicationLog(
+    if email_type not in EMAIL_TYPES:
+        raise ValueError(f"Unsupported email type '{email_type}'")
+
+    log = CommunicationLog(
         application_id=application_id,
         manual_review_case_id=manual_review_case_id,
-        recipient_email=recipient_email,
-        template_key=template_key,
+        recipient_email=to_email or "",
+        template_key=email_type,
         subject=subject,
-        body_text=body_text,
-        metadata_json=json.dumps(metadata),
+        body_text=html_body,
         status="pending",
+        channel="email",
+        metadata_json=json.dumps(metadata or {}),
     )
+    db.add(log)
 
-
-def _deliver_log(
-    db: Session,
-    *,
-    log: CommunicationLog,
-) -> CommunicationLog:
-    provider = _get_email_provider()
-    if not log.recipient_email:
+    provider = _build_email_provider()
+    if not to_email:
         log.status = "skipped"
         log.error_message = "Recipient email is missing"
-        db.add(log)
         db.commit()
         db.refresh(log)
         return log
@@ -139,16 +258,15 @@ def _deliver_log(
     if not provider:
         log.status = "skipped"
         log.error_message = "Email provider is not configured"
-        db.add(log)
         db.commit()
         db.refresh(log)
         return log
 
     try:
         result = provider.send_email(
-            to_email=log.recipient_email,
-            subject=log.subject,
-            body_text=log.body_text,
+            to_email=to_email,
+            subject=subject,
+            html_body=html_body,
         )
         log.status = "sent"
         log.provider_name = result.provider_name
@@ -157,7 +275,7 @@ def _deliver_log(
     except Exception as exc:
         log.status = "failed"
         log.provider_name = provider.provider_name
-        log.error_message = str(exc)
+        log.error_message = f"Email delivery failed: {type(exc).__name__}"
 
     db.add(log)
     db.commit()
@@ -171,52 +289,73 @@ def send_automated_decision_notification(
     application_id: str,
     decision: str,
 ) -> CommunicationLog | None:
-    if decision not in {"approved", "rejected"}:
+    email_type = {
+        "approved": "agent_final_approved",
+        "rejected": "agent_final_rejected",
+    }.get(decision)
+    if not email_type:
         return None
 
+    if _existing_sent_log(db, application_id=application_id, email_type=email_type):
+        return None
+
+    context = _load_application_email_context(db, application_id=application_id)
+    email_payload = generate_application_email(
+        application=context.application,
+        agent_outputs=context.agent_outputs,
+        email_type=email_type,
+    )
+    return send_application_email(
+        db=db,
+        application_id=context.application.id,
+        to_email=context.applicant.email,
+        subject=email_payload["subject"],
+        html_body=email_payload["html_body"],
+        email_type=email_type,
+        metadata={
+            "application_number": context.application.application_number,
+            "decision": decision,
+        },
+    )
+
+
+def send_manual_review_escalation_notification(
+    db: Session,
+    *,
+    manual_review_case_id: str,
+) -> CommunicationLog | None:
+    case = db.query(ManualReviewCase).filter(ManualReviewCase.id == manual_review_case_id).first()
+    if not case:
+        raise ValueError("Manual review case not found for notification")
+
+    email_type = "manual_review_escalated"
     if _existing_sent_log(
         db,
-        application_id=application_id,
-        template_key=f"application_{decision}",
+        application_id=case.application_id,
+        email_type=email_type,
+        manual_review_case_id=case.id,
     ):
         return None
 
-    application, applicant, decision_output = _load_application_context(
-        db,
-        application_id=application_id,
+    context = _load_application_email_context(db, application_id=case.application_id)
+    email_payload = generate_application_email(
+        application=context.application,
+        agent_outputs=context.agent_outputs,
+        email_type=email_type,
     )
-    flags = _coerce_flags(decision_output.flags if decision_output else None)
-    subject = f"Underlytics application {application.application_number}: {decision.title()}"
-    body_text = "\n".join(
-        [
-            f"Hello {applicant.full_name},",
-            "",
-            f"Your application {application.application_number} has been {decision}.",
-            f"Requested amount: {application.requested_amount}",
-            f"Requested term: {application.requested_term_months} month(s)",
-            "",
-            "Decision reasoning:",
-            decision_output.reasoning
-            if decision_output and decision_output.reasoning
-            else "No additional reasoning was recorded.",
-            "",
-            "Flags considered:",
-            ", ".join(flags) if flags else "None",
-        ]
-    )
-    log = _create_log(
-        application_id=application.id,
-        manual_review_case_id=None,
-        recipient_email=applicant.email,
-        template_key=f"application_{decision}",
-        subject=subject,
-        body_text=body_text,
+    return send_application_email(
+        db=db,
+        application_id=context.application.id,
+        to_email=context.applicant.email,
+        subject=email_payload["subject"],
+        html_body=email_payload["html_body"],
+        email_type=email_type,
+        manual_review_case_id=case.id,
         metadata={
-            "decision": decision,
-            "application_number": application.application_number,
+            "application_number": context.application.application_number,
+            "manual_review_case_id": case.id,
         },
     )
-    return _deliver_log(db, log=log)
 
 
 def send_manual_review_completed_notification(
@@ -228,18 +367,6 @@ def send_manual_review_completed_notification(
     if not case:
         raise ValueError("Manual review case not found for notification")
 
-    if _existing_sent_log(
-        db,
-        application_id=case.application_id,
-        template_key="manual_review_completed",
-        manual_review_case_id=case.id,
-    ):
-        return None
-
-    application, applicant, decision_output = _load_application_context(
-        db,
-        application_id=case.application_id,
-    )
     resolution_action = (
         db.query(ManualReviewAction)
         .filter(
@@ -249,43 +376,41 @@ def send_manual_review_completed_notification(
         .order_by(ManualReviewAction.created_at.desc())
         .first()
     )
-    final_decision = resolution_action.new_decision if resolution_action else application.status
-    reviewer_note = resolution_action.note if resolution_action else "No reviewer note recorded."
-    flags = _coerce_flags(decision_output.flags if decision_output else None)
+    if not resolution_action or resolution_action.new_decision not in {"approved", "rejected"}:
+        return None
 
-    subject = (
-        f"Underlytics application {application.application_number}: Manual review completed"
+    email_type = (
+        "manual_review_final_approved"
+        if resolution_action.new_decision == "approved"
+        else "manual_review_final_rejected"
     )
-    body_text = "\n".join(
-        [
-            f"Hello {applicant.full_name},",
-            "",
-            f"Manual review for application {application.application_number} is complete.",
-            f"Final decision: {final_decision}",
-            "",
-            "Reviewer note:",
-            reviewer_note,
-            "",
-            "Supporting agent reasoning:",
-            decision_output.reasoning
-            if decision_output and decision_output.reasoning
-            else "No additional reasoning was recorded.",
-            "",
-            "Flags considered:",
-            ", ".join(flags) if flags else "None",
-        ]
-    )
-    log = _create_log(
-        application_id=application.id,
+    if _existing_sent_log(
+        db,
+        application_id=case.application_id,
+        email_type=email_type,
         manual_review_case_id=case.id,
-        recipient_email=applicant.email,
-        template_key="manual_review_completed",
-        subject=subject,
-        body_text=body_text,
+    ):
+        return None
+
+    context = _load_application_email_context(db, application_id=case.application_id)
+    email_payload = generate_application_email(
+        application=context.application,
+        agent_outputs=context.agent_outputs,
+        email_type=email_type,
+        reviewer_note=resolution_action.note,
+        reviewer_decision=resolution_action.new_decision,
+    )
+    return send_application_email(
+        db=db,
+        application_id=context.application.id,
+        to_email=context.applicant.email,
+        subject=email_payload["subject"],
+        html_body=email_payload["html_body"],
+        email_type=email_type,
+        manual_review_case_id=case.id,
         metadata={
-            "decision": final_decision,
-            "application_number": application.application_number,
+            "application_number": context.application.application_number,
             "manual_review_case_id": case.id,
+            "decision": resolution_action.new_decision,
         },
     )
-    return _deliver_log(db, log=log)

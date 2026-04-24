@@ -1,3 +1,5 @@
+import { ApiApplication } from "@/lib/types/api-application";
+
 export interface CreateApplicationPayload {
   applicant_user_id: string;
   loan_product_id: string;
@@ -13,7 +15,9 @@ export interface CreateApplicationPayload {
   account_type?: string;
 }
 
-export async function createApplication(payload: CreateApplicationPayload) {
+export async function createApplication(
+  payload: CreateApplicationPayload
+): Promise<ApiApplication> {
   const response = await fetch(`/api/applications`, {
     method: "POST",
     headers: {

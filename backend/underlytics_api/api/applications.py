@@ -12,11 +12,15 @@ from underlytics_api.core.auth import (
     require_registered_actor,
 )
 from underlytics_api.db.dependencies import get_db
+from underlytics_api.models.agent_evaluation import AgentEvaluation
 from underlytics_api.models.application import Application
 from underlytics_api.models.loan_product import LoanProduct
 from underlytics_api.models.user import User
+from underlytics_api.schemas.agent_evaluation import ApplicationAgentEvaluationResponse
 from underlytics_api.schemas.application import ApplicationCreate, ApplicationResponse
+from underlytics_api.schemas.workflow import WorkflowStatusResponse
 from underlytics_api.services.workflow_dispatch_service import dispatch_underwriting_workflow
+from underlytics_api.services.workflow_status_service import build_workflow_status
 
 router = APIRouter(prefix="/api/applications", tags=["Applications"])
 
@@ -98,6 +102,64 @@ def get_application(
     )
 
     return application
+
+
+@router.get("/{application_number}/workflow-status", response_model=WorkflowStatusResponse)
+def get_application_workflow_status(
+    application_number: str,
+    db: Session = Depends(get_db),
+    actor: ActorContext = Depends(get_actor_context),
+):
+    require_authenticated_actor(actor)
+    require_registered_actor(actor)
+
+    application = (
+        db.query(Application)
+        .filter(Application.application_number == application_number)
+        .first()
+    )
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    enforce_application_access(
+        actor=actor, applicant_user_id=application.applicant_user_id
+    )
+
+    return build_workflow_status(db, application=application)
+
+
+@router.get(
+    "/{application_number}/evaluations",
+    response_model=list[ApplicationAgentEvaluationResponse],
+)
+def get_application_evaluations(
+    application_number: str,
+    db: Session = Depends(get_db),
+    actor: ActorContext = Depends(get_actor_context),
+):
+    require_authenticated_actor(actor)
+    require_registered_actor(actor)
+
+    application = (
+        db.query(Application)
+        .filter(Application.application_number == application_number)
+        .first()
+    )
+
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    enforce_application_access(
+        actor=actor, applicant_user_id=application.applicant_user_id
+    )
+
+    return (
+        db.query(AgentEvaluation)
+        .filter(AgentEvaluation.application_id == application.id)
+        .order_by(AgentEvaluation.created_at.desc(), AgentEvaluation.agent_name.asc())
+        .all()
+    )
 
 
 @router.post("", response_model=ApplicationResponse)

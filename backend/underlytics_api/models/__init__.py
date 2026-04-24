@@ -1,3 +1,4 @@
+from underlytics_api.models.agent_evaluation import AgentEvaluation
 from underlytics_api.models.agent_output import AgentOutput
 from underlytics_api.models.agent_run import AgentRun
 from underlytics_api.models.application import Application
@@ -21,6 +22,7 @@ __all__ = [
     "CommunicationLog",
     "UnderwritingJob",
     "AgentRun",
+    "AgentEvaluation",
     "AgentOutput",
     "WorkflowPlan",
     "WorkflowStep",

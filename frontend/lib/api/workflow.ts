@@ -1,4 +1,5 @@
 import { ApiAgentRun, ApiUnderwritingJob } from "@/lib/types/api-workflow";
+import { ApiWorkflowStatus } from "@/lib/types/api-workflow-status";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -36,6 +37,25 @@ export async function getAgentRuns(
 
   if (!response.ok) {
     throw new Error("Failed to fetch agent runs");
+  }
+
+  return response.json();
+}
+
+export async function getWorkflowStatus(
+  applicationNumber: string,
+  headers?: HeadersInit
+): Promise<ApiWorkflowStatus> {
+  const response = await fetch(
+    `${API_URL}/api/applications/${applicationNumber}/workflow-status`,
+    {
+      cache: "no-store",
+      headers,
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch workflow status");
   }
 
   return response.json();
