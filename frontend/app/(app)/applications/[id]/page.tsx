@@ -268,6 +268,11 @@ export default async function ApplicationDetailPage({
                           </div>
                         </div>
 
+                        <div className="flex flex-wrap items-center gap-2">
+                          <StatusBadge tone={plannerStatus.tone}>{plannerStatus.label}</StatusBadge>
+                          <StatusBadge tone="cyan">{completedRuns} completed workers</StatusBadge>
+                        </div>
+
                         <div className="grid gap-3 md:grid-cols-3">
                           <div className="rounded-2xl bg-white/6 px-4 py-4">
                             <p className="text-xs tracking-[0.18em] text-white/55 uppercase">
@@ -294,11 +299,6 @@ export default async function ApplicationDetailPage({
                             </p>
                           </div>
                         </div>
-
-                        <div className="flex flex-wrap items-center gap-2 border-t border-white/10 pt-1">
-                          <StatusBadge tone={plannerStatus.tone}>{plannerStatus.label}</StatusBadge>
-                          <StatusBadge tone="cyan">{completedRuns} completed workers</StatusBadge>
-                        </div>
                       </div>
                     </div>
 
@@ -314,23 +314,24 @@ export default async function ApplicationDetailPage({
                             className="rounded-[28px] border border-slate-200/80 bg-slate-50/80 p-5"
                           >
                             <div className="flex flex-col gap-4">
-                              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                <div className="flex min-w-0 items-start gap-3">
-                                  <div className="flex size-11 items-center justify-center rounded-2xl bg-white text-indigo-600 shadow-sm">
-                                    <Bot className="size-5" />
-                                  </div>
-                                  <div className="min-w-0">
-                                    <p className="font-medium text-slate-950">
-                                      {formatAgentName(run.agent_name)}
-                                    </p>
-                                    <p className="mt-1 text-sm text-slate-500">
-                                      Retries: {run.retry_count}
-                                    </p>
-                                  </div>
+                              <div className="flex min-w-0 items-start gap-3">
+                                <div className="flex size-11 items-center justify-center rounded-2xl bg-white text-indigo-600 shadow-sm">
+                                  <Bot className="size-5" />
                                 </div>
+                                <div className="min-w-0">
+                                  <p className="font-medium text-slate-950">
+                                    {formatAgentName(run.agent_name)}
+                                  </p>
+                                  <p className="mt-1 text-sm text-slate-500">
+                                    Retries: {run.retry_count}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-2">
                                 <StatusBadge
                                   tone={workflowStatus.tone}
-                                  className="w-fit shrink-0 self-start"
+                                  className="w-fit shrink-0"
                                 >
                                   {workflowStatus.label}
                                 </StatusBadge>

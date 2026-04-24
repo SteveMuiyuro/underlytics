@@ -2,43 +2,62 @@ Review and improve the layout/alignment on this page:
 
 https://underlytics.vercel.app/applications/APP-001
 
-Focus especially on the “Planner Workflow” section and the worker result cards below it.
 
-Main issues visible from the screenshots:
+The planner job agent is now okay but check the layout of the other agents specifically the status tag.
+Review the application detail page UI, specifically the worker cards and Planner Workflow section.
 
-1. Planner Job card layout is not well aligned
-The “Retries”, “Started”, and “Updated” stat boxes are squeezed and not visually balanced.
-The “Completed” status pill and “5 completed workers” pill currently appear on the left side and take space away from the main metadata layout.
-
-Required change:
-Move the “Completed” status pill and “5 completed workers” pill so they appear after the Retries / Started / Updated stat boxes, or redesign the card so all elements have enough room and align cleanly.
-The Planner Job card should look balanced on desktop and mobile.
-
-2. Worker cards are too squeezed
-Some cards have narrow stat boxes where text like “CONFID…” and decisions like “documents missing” are cramped or wrapping badly.
-The card grid needs better spacing, consistent widths, and cleaner alignment.
+Current issue:
+The “Completed” status badges are positioned on the right side of the card headers, which is causing layout compression and squeezing of other elements like Score, Confidence, and Decision.
 
 Required change:
-Improve the worker card layout so Score, Confidence, and Decision have enough space.
-Avoid awkward text clipping or cramped vertical boxes.
-Decision values should be readable without breaking the layout.
+Move all status badges (e.g. “Completed”) into their own dedicated row instead of placing them inline with the card header.
 
-3. Completed status buttons/pills are misaligned
-The green “Completed” pills on the worker cards are not consistently aligned with the card headers.
-Some overlap or sit too far to the right.
+Implementation details:
 
-Required change:
-Ensure all status pills align consistently inside the card header area.
-They should not overflow, overlap, or create uneven spacing.
+1. Card Header Layout
+- First row: agent icon + agent name (left aligned)
+- Second row: status badges (e.g. “Completed”) and any related badges (e.g. “5 completed workers”)
+- Ensure badges are left-aligned and wrap if necessary
+- Do NOT place badges on the far right anymore
 
-4. Preserve existing design direction
-Do not redesign the whole page.
-Keep the current visual style, colors, rounded cards, badges, and overall structure.
-Only improve spacing, alignment, responsiveness, and readability.
+2. Spacing and Alignment
+- Add vertical spacing between:
+  - header row
+  - status row
+  - stats (Score, Confidence, Decision)
+- Ensure consistent padding across all cards
+- Prevent any element from being squeezed horizontally
 
-5. Responsive behavior
-Check desktop and mobile layouts.
-On smaller widths, stack elements gracefully instead of squeezing them.
-Use flex-wrap, responsive grids, min-widths, or stacked layouts where necessary.
+3. Worker Cards
+- Apply this structure consistently to:
+  - Document Analysis
+  - Policy Retrieval
+  - Risk Assessment
+  - Fraud Verification
+  - Decision Summary
+- Ensure uniform layout across all worker cards
 
-Please inspect the relevant components for the application detail page, Planner Workflow card, and worker result cards. Refactor the layout/CSS/Tailwind classes to make the page visually polished, readable, and production-ready.
+4. Planner Job Card
+- Apply the same pattern:
+  - Title row
+  - Status row (Completed + completed workers)
+  - Stats row (Retries, Started, Updated)
+- Ensure stats have enough horizontal space and are not compressed
+
+5. Responsive Behavior
+- On smaller screens:
+  - Status badges should wrap naturally
+  - Avoid shrinking text or compressing stat boxes
+  - Stack sections vertically if needed
+
+6. Constraints
+- Do NOT redesign the visual style
+- Keep existing colors, badges, and components
+- Only improve layout, spacing, and alignment
+
+Goal:
+A clean, readable layout where:
+- badges do not compete for horizontal space
+- stats are clearly visible
+- cards feel balanced and not cramped
+- UI looks production-ready and consistent
