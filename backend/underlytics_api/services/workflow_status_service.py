@@ -139,7 +139,11 @@ def _resolve_worker_status(
     return "pending"
 
 
-def _resolve_current_stage(agents: list[WorkflowStatusAgentResponse], *, overall_status: str) -> str:
+def _resolve_current_stage(
+    agents: list[WorkflowStatusAgentResponse],
+    *,
+    overall_status: str,
+) -> str:
     if overall_status == "failed":
         failed_agent = next((agent for agent in agents if agent.status == "failed"), None)
         return failed_agent.name if failed_agent else "planner"
