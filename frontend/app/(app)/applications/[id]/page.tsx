@@ -84,6 +84,9 @@ export default async function ApplicationDetailPage({
 
   const decisionFlags = parseFlags(decisionOutput?.flags ?? null);
   const applicationStatus = getApplicationStatusMeta(application.status);
+  const decisionBadge = decisionOutput?.decision
+    ? getApplicationStatusMeta(decisionOutput.decision)
+    : applicationStatus;
   const plannerStatus = getWorkflowStatusMeta(job?.status ?? "pending");
   const applicationDetailItems: { label: string; value: string; Icon: LucideIcon }[] = [
     {
@@ -149,32 +152,27 @@ export default async function ApplicationDetailPage({
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.75fr)]">
           <div className="space-y-6">
-            <Card className="overflow-hidden rounded-[32px] border border-slate-200/80 bg-slate-950 py-0 text-white shadow-[0_32px_80px_-48px_rgba(15,23,42,0.9)]">
-              <CardHeader className="grid-pattern border-b border-white/10 py-6">
+            <Card className="overflow-hidden rounded-[32px] border border-slate-200/80 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.14),transparent_34%),linear-gradient(180deg,#020617_0%,#0f172a_100%)] py-0 text-white shadow-[0_32px_80px_-48px_rgba(15,23,42,0.9)]">
+              <CardHeader className="border-b border-white/10 bg-white/[0.02] py-6">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     <div className="flex items-center gap-3">
                       <div className="flex size-11 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/15">
                         <Sparkles className="size-5 text-cyan-300" />
                       </div>
                       <div>
                         <CardTitle className="text-white">Decision Summary</CardTitle>
-                        <CardDescription className="text-white/65">
-                          Final underwriting signal with score, confidence, reasoning, and flags.
-                        </CardDescription>
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <StatusBadge tone={applicationStatus.tone}>{applicationStatus.label}</StatusBadge>
-                      {decisionOutput?.decision ? (
-                        <StatusBadge tone={decisionOutput.decision === "approved" ? "green" : decisionOutput.decision === "rejected" ? "red" : "amber"}>
-                          {humanize(decisionOutput.decision)}
-                        </StatusBadge>
-                      ) : null}
+                      <StatusBadge tone={decisionBadge.tone}>{decisionBadge.label}</StatusBadge>
                     </div>
+                    <CardDescription className="max-w-2xl text-white/65">
+                      Final underwriting signal with score, confidence, reasoning, and flags.
+                    </CardDescription>
                   </div>
 
-                  <div className="rounded-[24px] border border-white/10 bg-white/6 px-5 py-4">
+                  <div className="rounded-[24px] border border-white/10 bg-white/6 px-5 py-4 lg:min-w-[240px]">
                     <p className="text-sm text-white/65">Requested amount</p>
                     <p className="mt-2 text-3xl font-semibold tracking-tight text-white">
                       {formatCurrency(application.requested_amount)}

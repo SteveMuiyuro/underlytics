@@ -1,63 +1,53 @@
 Review and improve the layout/alignment on this page:
 
 https://underlytics.vercel.app/applications/APP-001
+and the landing page https://underlytics.vercel.app
 
+Review the Decision Summary card on the application detail page.
 
-The planner job agent is now okay but check the layout of the other agents specifically the status tag.
-Review the application detail page UI, specifically the worker cards and Planner Workflow section.
+There is a similar dark card style on the landing page where you just need to remove the grid lines, but for the application detail page the grid background is creating visual noise. Keep the decision/status badge, but remove the grid lines.
 
-Current issue:
-The “Completed” status badges are positioned on the right side of the card headers, which is causing layout compression and squeezing of other elements like Score, Confidence, and Decision.
+Required changes:
 
-Required change:
-Move all status badges (e.g. “Completed”) into their own dedicated row instead of placing them inline with the card header.
+1. Remove grid background from the application detail Decision Summary card
+- Remove the visible grid line styling.
+- Replace it with a clean dark surface or subtle gradient.
+- Keep the premium fintech / AI look.
+- Do not remove the decision/status badge.
 
-Implementation details:
+2. Remove duplicate decision badges
+- Only show ONE decision badge, for example:
+  - Manual Review
+  - Approved
+  - Rejected
+- The current duplicate Manual Review badges should be reduced to one.
+- Keep the single badge clearly visible and well aligned.
 
-1. Card Header Layout
-- First row: agent icon + agent name (left aligned)
-- Second row: status badges (e.g. “Completed”) and any related badges (e.g. “5 completed workers”)
-- Ensure badges are left-aligned and wrap if necessary
-- Do NOT place badges on the far right anymore
+3. Improve visual hierarchy
+The card should communicate in this order:
+- Title: Decision Summary
+- Single decision/status badge
+- Short supporting description
+- Requested amount and term
+- Supporting signal/stat cards if already present
 
-2. Spacing and Alignment
-- Add vertical spacing between:
-  - header row
-  - status row
-  - stats (Score, Confidence, Decision)
-- Ensure consistent padding across all cards
-- Prevent any element from being squeezed horizontally
+4. Improve spacing and alignment
+- Add clean spacing between title, badge, description, amount, and stat sections.
+- Avoid overlapping or crowding.
+- Keep the requested amount card readable.
+- Ensure the badge does not compete with the title or description.
 
-3. Worker Cards
-- Apply this structure consistently to:
-  - Document Analysis
-  - Policy Retrieval
-  - Risk Assessment
-  - Fraud Verification
-  - Decision Summary
-- Ensure uniform layout across all worker cards
+5. Keep design consistency
+- Preserve the existing dark fintech style.
+- Keep rounded corners, existing color palette, and badge styling.
+- Do not redesign the entire page.
+- Do not remove useful decision/status tags entirely.
+- Only remove the grid background and duplicate badges.
 
-4. Planner Job Card
-- Apply the same pattern:
-  - Title row
-  - Status row (Completed + completed workers)
-  - Stats row (Retries, Started, Updated)
-- Ensure stats have enough horizontal space and are not compressed
-
-5. Responsive Behavior
-- On smaller screens:
-  - Status badges should wrap naturally
-  - Avoid shrinking text or compressing stat boxes
-  - Stack sections vertically if needed
-
-6. Constraints
-- Do NOT redesign the visual style
-- Keep existing colors, badges, and components
-- Only improve layout, spacing, and alignment
+6. Responsive behavior
+- Ensure the card looks clean on desktop and mobile.
+- Stack sections naturally on small screens.
+- Prevent text and badges from overlapping.
 
 Goal:
-A clean, readable layout where:
-- badges do not compete for horizontal space
-- stats are clearly visible
-- cards feel balanced and not cramped
-- UI looks production-ready and consistent
+The Decision Summary card should look clean, professional, and trustworthy. It should keep one clear decision badge, remove unnecessary duplicate tags, remove noisy grid lines on the application detail page, and preserve the premium fintech visual style.
