@@ -61,7 +61,7 @@ jobs:
             echo "- Commit: \`${GITHUB_SHA}\`"
             echo "- Terraform deploy status: \`${status}\`"
             echo "- Missing required repository variables: \`${missing_text}\`"
-            echo "- Terraform steps in this workflow: \`terraform init\`, \`terraform validate\`, Docker build/push, full \`terraform apply\`"
+            echo "- Terraform steps: \`terraform init\`, \`terraform validate\`, Docker build/push, full \`terraform apply\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
   verify:
@@ -171,14 +171,28 @@ jobs:
       - name: Capture deployment outputs
         id: outputs
         run: |
-          echo "api_gateway_url=$(terraform output -raw api_gateway_url)" >> "$GITHUB_OUTPUT"
-          echo "backend_cloud_run_url=$(terraform output -raw backend_cloud_run_url)" >> "$GITHUB_OUTPUT"
-          echo "worker_cloud_run_url=$(terraform output -raw worker_cloud_run_url)" >> "$GITHUB_OUTPUT"
+          API_GATEWAY_URL="$(terraform output -raw api_gateway_url)"
+          BACKEND_CLOUD_RUN_URL="$(terraform output -raw backend_cloud_run_url)"
+          WORKER_CLOUD_RUN_URL="$(terraform output -raw worker_cloud_run_url)"
+
+          echo "api_gateway_url=${API_GATEWAY_URL}" >> "$GITHUB_OUTPUT"
+          echo "backend_cloud_run_url=${BACKEND_CLOUD_RUN_URL}" >> "$GITHUB_OUTPUT"
+          echo "worker_cloud_run_url=${WORKER_CLOUD_RUN_URL}" >> "$GITHUB_OUTPUT"
+
+          echo "API_GATEWAY_URL=${API_GATEWAY_URL}" >> "$GITHUB_ENV"
+          echo "BACKEND_CLOUD_RUN_URL=${BACKEND_CLOUD_RUN_URL}" >> "$GITHUB_ENV"
+          echo "WORKER_CLOUD_RUN_URL=${WORKER_CLOUD_RUN_URL}" >> "$GITHUB_ENV"
 
       - name: Verify public backend
         run: |
-          curl -fsS "${{ steps.outputs.api_gateway_url }}/" > /tmp/api-gateway-root.json
-          curl -fsS "${{ steps.outputs.backend_cloud_run_url }}/" > /tmp/backend-root.json
+          echo "API Gateway URL: ${API_GATEWAY_URL}"
+          echo "Backend URL: ${BACKEND_CLOUD_RUN_URL}"
+
+          test -n "${API_GATEWAY_URL}"
+          test -n "${BACKEND_CLOUD_RUN_URL}"
+
+          curl -fsS "${API_GATEWAY_URL}/" > /tmp/api-gateway-root.json
+          curl -fsS "${BACKEND_CLOUD_RUN_URL}/" > /tmp/backend-root.json
 
       - name: Publish deployment summary
         run: |
@@ -186,8 +200,8 @@ jobs:
             echo "## Backend Deployment"
             echo ""
             echo "- Image tag: \`${IMAGE_TAG}\`"
-            echo "- API Gateway URL: \`${{ steps.outputs.api_gateway_url }}\`"
-            echo "- Backend Cloud Run URL: \`${{ steps.outputs.backend_cloud_run_url }}\`"
-            echo "- Worker Cloud Run URL: \`${{ steps.outputs.worker_cloud_run_url }}\`"
-            echo "- NEXT_PUBLIC_API_URL: \`${{ steps.outputs.api_gateway_url }}\`"
+            echo "- API Gateway URL: \`${API_GATEWAY_URL}\`"
+            echo "- Backend Cloud Run URL: \`${BACKEND_CLOUD_RUN_URL}\`"
+            echo "- Worker Cloud Run URL: \`${WORKER_CLOUD_RUN_URL}\`"
+            echo "- NEXT_PUBLIC_API_URL: \`${API_GATEWAY_URL}\`"
           } >> "$GITHUB_STEP_SUMMARY"
