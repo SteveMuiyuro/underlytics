@@ -1,4 +1,3 @@
-import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -95,7 +94,6 @@ def sync_user(
         return existing_user
 
     user = User(
-        id=str(uuid.uuid4()),
         clerk_user_id=payload.clerk_user_id,
         email=payload.email,
         full_name=payload.full_name,
