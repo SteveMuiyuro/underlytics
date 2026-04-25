@@ -1,8 +1,10 @@
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-import uuid
+
 from underlytics_api.core.auth import (
     ActorContext,
     get_actor_context,
