@@ -103,9 +103,13 @@ def test_prompt_registry_contains_all_autonomous_underwriting_agents():
     assert "risk_assessment" in snapshot
     assert "fraud_verification" in snapshot
     assert "decision_summary" in snapshot
+    assert "email_agent" in snapshot
     assert snapshot["document_analysis"]["model_provider"] == "vertex_ai"
     assert snapshot["policy_retrieval"]["supports_mcp"] is True
     assert snapshot["decision_summary"]["model_name"] == "gpt-5.4"
+    assert snapshot["decision_summary"]["fallback_model_names"] == ["gpt-5.3", "gpt-5.2"]
+    assert snapshot["email_agent"]["model_provider"] == "vertex_ai"
+    assert snapshot["email_agent"]["model_name"] == "gemini-2.5-flash"
 
 
 def test_autonomous_agent_input_is_scoped_per_agent():
@@ -192,7 +196,16 @@ def test_autonomous_agent_execution_includes_prompt_metadata(monkeypatch):
     }
 
     def fake_run_structured_agent(*, prompt, scoped_input, output_type):
-        return outputs[prompt.agent_name]
+        runtime_model_name = (
+            "gpt-5.3" if prompt.agent_name == "decision_summary" else prompt.model_name
+        )
+        return {
+            **outputs[prompt.agent_name],
+            "__runtime": {
+                "model_provider": prompt.model_provider,
+                "model_name": runtime_model_name,
+            },
+        }
 
     monkeypatch.setattr(
         "underlytics_api.services.underwriting_agent_service._run_structured_agent",
@@ -242,14 +255,24 @@ def test_autonomous_agent_execution_includes_prompt_metadata(monkeypatch):
     assert document_execution.output["agent_metadata"]["agent_name"] == "document_analysis"
     assert document_execution.output["agent_metadata"]["prompt_version"] == "v2"
     assert document_execution.output["agent_metadata"]["model_provider"] == "vertex_ai"
+    assert document_execution.output["agent_metadata"]["model_name"] == "gemini-2.5-flash"
     assert decision_execution.prompt.model_name == "gpt-5.4"
+    assert decision_execution.output["agent_metadata"]["model_provider"] == "openai"
+    assert decision_execution.output["agent_metadata"]["model_name"] == "gpt-5.3"
+    assert decision_execution.output["agent_metadata"]["fallback_model_names"] == [
+        "gpt-5.3",
+        "gpt-5.2",
+    ]
     assert decision_execution.output["decision"] in {"approved", "manual_review", "rejected"}
 
 
 def test_get_agent_prompt_definition_returns_distinct_system_prompts():
     document_prompt = get_agent_prompt_definition("document_analysis")
     decision_prompt = get_agent_prompt_definition("decision_summary")
+    email_prompt = get_agent_prompt_definition("email_agent")
 
     assert document_prompt.system_prompt != decision_prompt.system_prompt
     assert document_prompt.role == "Document Analysis Worker"
     assert decision_prompt.role == "Decision Summary Agent"
+    assert email_prompt.model_provider == "vertex_ai"
+    assert email_prompt.model_name == "gemini-2.5-flash"

@@ -4,7 +4,7 @@ import json
 import os
 from typing import Any
 
-from agents import Agent, ModelSettings, Runner
+from agents import Agent, AgentOutputSchema, ModelSettings, Runner
 from pydantic import BaseModel
 
 from underlytics_api.agents.prompts.base import AgentPromptDefinition
@@ -31,6 +31,19 @@ def _build_agent_payload(
         },
         indent=2,
     )
+
+
+def _runtime_metadata(
+    *,
+    provider: str,
+    model_name: str,
+) -> dict[str, Any]:
+    return {
+        "__runtime": {
+            "model_provider": provider,
+            "model_name": model_name,
+        }
+    }
 
 
 def _fallback_structured_output(prompt: AgentPromptDefinition) -> dict[str, Any]:
@@ -106,6 +119,30 @@ def _fallback_structured_output(prompt: AgentPromptDefinition) -> dict[str, Any]
     }
 
 
+def _candidate_model_names(prompt: AgentPromptDefinition) -> list[str]:
+    candidates = [prompt.model_name, *prompt.fallback_model_names]
+    resolved: list[str] = []
+    for candidate in candidates:
+        normalized = candidate.strip()
+        if normalized and normalized not in resolved:
+            resolved.append(normalized)
+    return resolved
+
+
+def _is_openai_model_unavailable_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    unavailable_markers = (
+        "not found",
+        "does not exist",
+        "unsupported",
+        "not available",
+        "unknown model",
+        "access",
+        "permission",
+    )
+    return "model" in message and any(marker in message for marker in unavailable_markers)
+
+
 def _run_openai_structured_agent(
     *,
     prompt: AgentPromptDefinition,
@@ -115,24 +152,53 @@ def _run_openai_structured_agent(
     if _is_test_or_deterministic_mode():
         return _fallback_structured_output(prompt)
 
-    agent = Agent(
-        name=prompt.role,
-        instructions=prompt.system_prompt,
-        model=prompt.model_name,
-        model_settings=ModelSettings(
-            temperature=0.15,
-            max_tokens=1400,
-        ),
-        output_type=output_type,
-    )
+    payload = _build_agent_payload(prompt=prompt, scoped_input=scoped_input)
+    model_candidates = _candidate_model_names(prompt)
+    last_error: Exception | None = None
 
-    result = Runner.run_sync(
-        agent,
-        _build_agent_payload(prompt=prompt, scoped_input=scoped_input),
-    )
+    for index, model_name in enumerate(model_candidates):
+        try:
+            agent = Agent(
+                name=prompt.role,
+                instructions=prompt.system_prompt,
+                model=model_name,
+                model_settings=ModelSettings(
+                    temperature=0.15,
+                    max_tokens=1400,
+                ),
+                output_type=AgentOutputSchema(
+                output_type,
+                strict_json_schema=False,
+                ),
+            )
 
-    output = result.final_output_as(output_type, raise_if_incorrect_type=True)
-    return output.model_dump(exclude_none=True)
+            result = Runner.run_sync(agent, payload)
+            output = result.final_output_as(output_type, raise_if_incorrect_type=True)
+            return {
+                **output.model_dump(exclude_none=True),
+                **_runtime_metadata(
+                    provider=prompt.model_provider,
+                    model_name=model_name,
+                ),
+            }
+        except Exception as exc:
+            last_error = exc
+            is_last_candidate = index == len(model_candidates) - 1
+            if is_last_candidate or not _is_openai_model_unavailable_error(exc):
+                if prompt.agent_name == "decision_summary":
+                    return {
+                        **_fallback_structured_output(prompt),
+                        **_runtime_metadata(
+                            provider="deterministic_fallback",
+                            model_name="decision_summary_fallback",
+                        ),
+                    }
+                raise
+
+    if last_error is not None:
+        raise last_error
+
+    raise RuntimeError("No OpenAI model candidates configured for agent execution")
 
 
 def _run_vertex_structured_agent(
@@ -180,20 +246,34 @@ def _run_vertex_structured_agent(
 
     if parsed_output is not None:
         if isinstance(parsed_output, BaseModel):
-            return parsed_output.model_dump(exclude_none=True)
+            return {
+                **parsed_output.model_dump(exclude_none=True),
+                **_runtime_metadata(
+                    provider=prompt.model_provider,
+                    model_name=prompt.model_name,
+                ),
+            }
 
-        return output_type.model_validate(parsed_output).model_dump(
-            exclude_none=True
-        )
+        return {
+            **output_type.model_validate(parsed_output).model_dump(exclude_none=True),
+            **_runtime_metadata(
+                provider=prompt.model_provider,
+                model_name=prompt.model_name,
+            ),
+        }
 
     response_text = getattr(response, "text", None)
 
     if not response_text:
         raise RuntimeError("No structured output from Vertex")
 
-    return output_type.model_validate_json(response_text).model_dump(
-        exclude_none=True
-    )
+    return {
+        **output_type.model_validate_json(response_text).model_dump(exclude_none=True),
+        **_runtime_metadata(
+            provider=prompt.model_provider,
+            model_name=prompt.model_name,
+        ),
+    }
 
 
 def run_structured_agent(

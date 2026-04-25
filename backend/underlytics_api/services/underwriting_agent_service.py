@@ -181,6 +181,18 @@ def _run_structured_agent(
     )
 
 
+def _extract_runtime_metadata(
+    output: dict[str, Any],
+    *,
+    prompt: AgentPromptDefinition,
+) -> dict[str, Any]:
+    runtime_metadata = output.pop("__runtime", {}) if output else {}
+    return {
+        "model_provider": runtime_metadata.get("model_provider", prompt.model_provider),
+        "model_name": runtime_metadata.get("model_name", prompt.model_name),
+    }
+
+
 def execute_autonomous_underwriting_agent(
     db: Session,
     *,
@@ -200,14 +212,16 @@ def execute_autonomous_underwriting_agent(
         scoped_input=scoped_input,
         output_type=EvaluationAgentOutput,
     )
+    runtime_metadata = _extract_runtime_metadata(output, prompt=prompt)
     output["agent_metadata"] = {
         "agent_name": prompt.agent_name,
         "role": prompt.role,
-        "model_provider": prompt.model_provider,
-        "model_name": prompt.model_name,
+        "model_provider": runtime_metadata["model_provider"],
+        "model_name": runtime_metadata["model_name"],
         "prompt_version": prompt.prompt_version,
         "supports_mcp": prompt.supports_mcp,
         "allowed_tools": list(prompt.allowed_tools),
+        "fallback_model_names": list(prompt.fallback_model_names),
         "execution_mode": "autonomous_llm",
     }
     return AutonomousAgentExecution(
@@ -216,11 +230,12 @@ def execute_autonomous_underwriting_agent(
         scoped_input={
             "agent_name": prompt.agent_name,
             "role": prompt.role,
-            "model_provider": prompt.model_provider,
-            "model_name": prompt.model_name,
+            "model_provider": runtime_metadata["model_provider"],
+            "model_name": runtime_metadata["model_name"],
             "prompt_version": prompt.prompt_version,
             "supports_mcp": prompt.supports_mcp,
             "allowed_tools": list(prompt.allowed_tools),
+            "fallback_model_names": list(prompt.fallback_model_names),
             "allowed_decisions": list(prompt.allowed_decisions),
             "system_prompt": prompt.system_prompt,
             "input": scoped_input,
@@ -230,7 +245,12 @@ def execute_autonomous_underwriting_agent(
 
 
 def prompt_registry_snapshot() -> dict[str, dict[str, Any]]:
-    return {
-        agent_name: asdict(prompt)
-        for agent_name, prompt in PROMPT_REGISTRY.items()
-    }
+    snapshot: dict[str, dict[str, Any]] = {}
+    for agent_name, prompt in PROMPT_REGISTRY.items():
+        prompt_dict = asdict(prompt)
+        prompt_dict["allowed_decisions"] = list(prompt.allowed_decisions)
+        prompt_dict["fallback_model_names"] = list(prompt.fallback_model_names)
+        prompt_dict["allowed_tools"] = list(prompt.allowed_tools)
+        snapshot[agent_name] = prompt_dict
+
+    return snapshot

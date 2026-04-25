@@ -98,10 +98,26 @@ variable "clerk_secret_key" {
 }
 
 variable "clerk_authorized_parties" {
-  description = "Optional comma-separated Clerk authorized parties for backend token validation."
+  description = "Comma-separated Clerk authorized parties for backend token validation."
   type        = string
   sensitive   = true
-  default     = ""
+  default     = "http://localhost:3000,https://underlytics.vercel.app,https://underlytics-steve-mwangis-projects.vercel.app,https://underlytics-git-main-steve-mwangis-projects.vercel.app"
+
+  validation {
+    condition = trimspace(nonsensitive(var.clerk_authorized_parties)) != "" && length(setsubtract(
+      toset([
+        "http://localhost:3000",
+        "https://underlytics.vercel.app",
+        "https://underlytics-steve-mwangis-projects.vercel.app",
+        "https://underlytics-git-main-steve-mwangis-projects.vercel.app",
+      ]),
+      toset([
+        for party in split(",", nonsensitive(var.clerk_authorized_parties)) : trimspace(party)
+        if trimspace(party) != ""
+      ])
+    )) == 0
+    error_message = "clerk_authorized_parties must include the required localhost and Vercel Clerk origins."
+  }
 }
 
 variable "clerk_webhook_secret" {

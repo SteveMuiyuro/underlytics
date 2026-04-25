@@ -90,22 +90,21 @@ locals {
   }
 
   secret_value_presence = {
-    "admin-bootstrap-secret"   = trimspace(nonsensitive(var.admin_bootstrap_secret)) != ""
-    "clerk-jwt-key"            = trimspace(nonsensitive(var.clerk_jwt_key)) != ""
-    "clerk-jwt-issuer"         = trimspace(nonsensitive(var.clerk_jwt_issuer)) != ""
-    "clerk-publishable-key"    = trimspace(nonsensitive(var.clerk_publishable_key)) != ""
-    "clerk-secret-key"         = trimspace(nonsensitive(var.clerk_secret_key)) != ""
-    "clerk-authorized-parties" = trimspace(nonsensitive(var.clerk_authorized_parties)) != ""
-    "clerk-webhook-secret"     = trimspace(nonsensitive(var.clerk_webhook_secret)) != ""
-    "langfuse-public-key"      = trimspace(nonsensitive(var.langfuse_public_key)) != ""
-    "langfuse-secret-key"      = trimspace(nonsensitive(var.langfuse_secret_key)) != ""
-    "langfuse-host"            = trimspace(var.langfuse_host) != ""
-    "openai-api-key"           = trimspace(nonsensitive(var.openai_api_key)) != ""
-    "resend-api-key"           = trimspace(nonsensitive(var.resend_api_key)) != ""
-    "email-from"               = trimspace(var.email_from) != ""
-    "vertex-project-id"        = trimspace(var.project_id) != ""
-    "vertex-location"          = trimspace(var.vertex_location) != ""
-    "vertex-model"             = trimspace(var.vertex_model) != ""
+    "admin-bootstrap-secret" = trimspace(nonsensitive(var.admin_bootstrap_secret)) != ""
+    "clerk-jwt-key"          = trimspace(nonsensitive(var.clerk_jwt_key)) != ""
+    "clerk-jwt-issuer"       = trimspace(nonsensitive(var.clerk_jwt_issuer)) != ""
+    "clerk-publishable-key"  = trimspace(nonsensitive(var.clerk_publishable_key)) != ""
+    "clerk-secret-key"       = trimspace(nonsensitive(var.clerk_secret_key)) != ""
+    "clerk-webhook-secret"   = trimspace(nonsensitive(var.clerk_webhook_secret)) != ""
+    "langfuse-public-key"    = trimspace(nonsensitive(var.langfuse_public_key)) != ""
+    "langfuse-secret-key"    = trimspace(nonsensitive(var.langfuse_secret_key)) != ""
+    "langfuse-host"          = trimspace(var.langfuse_host) != ""
+    "openai-api-key"         = trimspace(nonsensitive(var.openai_api_key)) != ""
+    "resend-api-key"         = trimspace(nonsensitive(var.resend_api_key)) != ""
+    "email-from"             = trimspace(var.email_from) != ""
+    "vertex-project-id"      = trimspace(var.project_id) != ""
+    "vertex-location"        = trimspace(var.vertex_location) != ""
+    "vertex-model"           = trimspace(var.vertex_model) != ""
   }
 
   configured_secret_names = toset([
@@ -120,15 +119,14 @@ locals {
   gateway_api_config_id_prefix    = "cfg-${substr(md5(local.gateway_openapi_document), 0, 8)}-"
 
   backend_secret_envs = {
-    "ADMIN_BOOTSTRAP_SECRET"   = "admin-bootstrap-secret"
-    "CLERK_JWT_KEY"            = "clerk-jwt-key"
-    "CLERK_JWT_ISSUER"         = "clerk-jwt-issuer"
-    "CLERK_PUBLISHABLE_KEY"    = "clerk-publishable-key"
-    "CLERK_AUTHORIZED_PARTIES" = "clerk-authorized-parties"
-    "LANGFUSE_PUBLIC_KEY"      = "langfuse-public-key"
-    "LANGFUSE_SECRET_KEY"      = "langfuse-secret-key"
-    "LANGFUSE_HOST"            = "langfuse-host"
-    "OPENAI_API_KEY"           = "openai-api-key"
+    "ADMIN_BOOTSTRAP_SECRET" = "admin-bootstrap-secret"
+    "CLERK_JWT_KEY"          = "clerk-jwt-key"
+    "CLERK_JWT_ISSUER"       = "clerk-jwt-issuer"
+    "CLERK_PUBLISHABLE_KEY"  = "clerk-publishable-key"
+    "LANGFUSE_PUBLIC_KEY"    = "langfuse-public-key"
+    "LANGFUSE_SECRET_KEY"    = "langfuse-secret-key"
+    "LANGFUSE_HOST"          = "langfuse-host"
+    "OPENAI_API_KEY"         = "openai-api-key"
   }
 
   worker_secret_envs = {
@@ -284,6 +282,11 @@ resource "google_secret_manager_secret_version" "database_url" {
   secret_data = "postgresql+psycopg2://${urlencode(var.db_user)}:${urlencode(random_password.database_password.result)}@/${var.db_name}?host=/cloudsql/${google_sql_database_instance.postgres.connection_name}"
 }
 
+resource "google_secret_manager_secret_version" "clerk_authorized_parties" {
+  secret      = google_secret_manager_secret.app["clerk-authorized-parties"].id
+  secret_data = var.clerk_authorized_parties
+}
+
 resource "google_secret_manager_secret_version" "configured" {
   for_each = local.configured_secret_names
 
@@ -340,6 +343,21 @@ resource "google_cloud_run_v2_service" "backend" {
       env {
         name  = "UNDERLYTICS_DATABASE_URL_SECRET_VERSION"
         value = google_secret_manager_secret_version.database_url.version
+      }
+
+      env {
+        name = "CLERK_AUTHORIZED_PARTIES"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.app["clerk-authorized-parties"].secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name  = "UNDERLYTICS_CLERK_AUTHORIZED_PARTIES_SECRET_VERSION"
+        value = google_secret_manager_secret_version.clerk_authorized_parties.version
       }
 
       dynamic "env" {
@@ -404,6 +422,7 @@ resource "google_cloud_run_v2_service" "backend" {
   depends_on = [
     google_artifact_registry_repository.backend,
     google_secret_manager_secret_version.database_url,
+    google_secret_manager_secret_version.clerk_authorized_parties,
     google_secret_manager_secret_version.configured,
     google_secret_manager_secret_iam_member.backend_access,
   ]

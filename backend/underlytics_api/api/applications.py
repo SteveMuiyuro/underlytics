@@ -24,6 +24,16 @@ from underlytics_api.services.workflow_status_service import build_workflow_stat
 
 router = APIRouter(prefix="/api/applications", tags=["Applications"])
 
+EMPLOYER_NAME_HIDDEN_STATUSES = {"self_employed", "unemployed"}
+
+
+def _normalize_optional_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+
+    normalized = value.strip()
+    return normalized or None
+
 
 @router.get("", response_model=list[ApplicationResponse])
 def list_applications(
@@ -187,6 +197,18 @@ def create_application(
 
     count = db.query(Application).count() + 1
     application_number = f"APP-{count:03d}"
+    normalized_employment_status = _normalize_optional_text(payload.employment_status)
+    normalized_existing_obligations = max(payload.existing_loan_obligations, 0)
+    normalized_employer_name = _normalize_optional_text(payload.employer_name)
+    normalized_bank_name = _normalize_optional_text(payload.bank_name)
+    normalized_account_type = _normalize_optional_text(payload.account_type)
+
+    if normalized_employment_status in EMPLOYER_NAME_HIDDEN_STATUSES:
+        normalized_employer_name = None
+
+    if normalized_existing_obligations <= 0:
+        normalized_bank_name = None
+        normalized_account_type = None
 
     application = Application(
         application_number=application_number,
@@ -198,11 +220,11 @@ def create_application(
         loan_purpose=payload.loan_purpose,
         monthly_income=payload.monthly_income,
         monthly_expenses=payload.monthly_expenses,
-        existing_loan_obligations=payload.existing_loan_obligations,
-        employment_status=payload.employment_status,
-        employer_name=payload.employer_name,
-        bank_name=payload.bank_name,
-        account_type=payload.account_type,
+        existing_loan_obligations=normalized_existing_obligations,
+        employment_status=normalized_employment_status,
+        employer_name=normalized_employer_name,
+        bank_name=normalized_bank_name,
+        account_type=normalized_account_type,
         submitted_at=datetime.utcnow(),
     )
 

@@ -46,6 +46,8 @@ interface NewApplicationFormProps {
   };
 }
 
+const EMPLOYER_NAME_HIDDEN_STATUSES = new Set(["self_employed", "unemployed"]);
+
 const COUNTRY_CODE_OPTIONS = [
   { label: "United States (+1)", code: "+1" },
   { label: "Canada (+1)", code: "+1" },
@@ -133,6 +135,10 @@ export default function NewApplicationForm({
   const monthlyIncome = Number(formData.monthly_income || 0);
   const monthlyExpenses = Number(formData.monthly_expenses || 0);
   const obligations = Number(formData.existing_loan_obligations || 0);
+  const shouldShowEmployerName =
+    Boolean(formData.employment_status) &&
+    !EMPLOYER_NAME_HIDDEN_STATUSES.has(formData.employment_status);
+  const shouldShowBankingFields = obligations > 0;
   const monthlyBuffer = Math.max(monthlyIncome - monthlyExpenses - obligations, 0);
   const selectedDocumentCount = Object.values(documentFiles).filter(Boolean).length;
   const missingDocumentLabels = [
@@ -146,6 +152,13 @@ export default function NewApplicationForm({
     setFormData((prev) => ({
       ...prev,
       [name]: value,
+      ...(name === "employment_status" &&
+      EMPLOYER_NAME_HIDDEN_STATUSES.has(value)
+        ? { employer_name: "" }
+        : {}),
+      ...(name === "existing_loan_obligations" && Number(value || 0) <= 0
+        ? { bank_name: "", account_type: "" }
+        : {}),
     }));
   }
 
@@ -165,6 +178,16 @@ export default function NewApplicationForm({
     setIsSubmitting(true);
 
     try {
+      const cleanedEmploymentStatus = formData.employment_status || undefined;
+      const cleanedEmployerName = shouldShowEmployerName
+        ? formData.employer_name.trim()
+        : "";
+      const cleanedBankName = shouldShowBankingFields
+        ? formData.bank_name.trim()
+        : "";
+      const cleanedAccountType = shouldShowBankingFields
+        ? formData.account_type
+        : "";
       const application = await createApplication({
         applicant_user_id: formData.applicant_user_id,
         loan_product_id: formData.loan_product_id,
@@ -174,10 +197,14 @@ export default function NewApplicationForm({
         monthly_income: Number(formData.monthly_income),
         monthly_expenses: Number(formData.monthly_expenses),
         existing_loan_obligations: Number(formData.existing_loan_obligations || 0),
-        employment_status: formData.employment_status,
-        employer_name: formData.employer_name,
-        bank_name: formData.bank_name,
-        account_type: formData.account_type,
+        employment_status: cleanedEmploymentStatus,
+        ...(cleanedEmployerName
+          ? { employer_name: cleanedEmployerName }
+          : {}),
+        ...(cleanedBankName ? { bank_name: cleanedBankName } : {}),
+        ...(cleanedAccountType
+          ? { account_type: cleanedAccountType }
+          : {}),
         auto_start_workflow: false,
       });
 
@@ -324,18 +351,20 @@ export default function NewApplicationForm({
                 </FormItem>
               </FormField>
 
-              <FormField className="md:col-span-2">
-                <FormItem>
-                  <FormLabel>Employer Name</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="Employer or business name"
-                      value={formData.employer_name}
-                      onChange={(e) => updateField("employer_name", e.target.value)}
-                    />
-                  </FormControl>
-                </FormItem>
-              </FormField>
+              {shouldShowEmployerName ? (
+                <FormField className="md:col-span-2">
+                  <FormItem>
+                    <FormLabel>Employer Name</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Employer name"
+                        value={formData.employer_name}
+                        onChange={(e) => updateField("employer_name", e.target.value)}
+                      />
+                    </FormControl>
+                  </FormItem>
+                </FormField>
+              ) : null}
             </CardContent>
           </Card>
 
@@ -470,37 +499,41 @@ export default function NewApplicationForm({
                 </FormItem>
               </FormField>
 
-              <FormField>
-                <FormItem>
-                  <FormLabel>Bank Name</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="Primary banking institution"
-                      value={formData.bank_name}
-                      onChange={(e) => updateField("bank_name", e.target.value)}
-                    />
-                  </FormControl>
-                </FormItem>
-              </FormField>
+              {shouldShowBankingFields ? (
+                <>
+                  <FormField>
+                    <FormItem>
+                      <FormLabel>Bank Name</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Primary banking institution"
+                          value={formData.bank_name}
+                          onChange={(e) => updateField("bank_name", e.target.value)}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  </FormField>
 
-              <FormField className="md:col-span-2">
-                <FormItem>
-                  <FormLabel>Account Type</FormLabel>
-                  <FormControl>
-                    <Select
-                      value={formData.account_type}
-                      onValueChange={(value) => updateField("account_type", value)}
-                      placeholder="Select account type"
-                      options={[
-                        { label: "Current", value: "current" },
-                        { label: "Savings", value: "savings" },
-                        { label: "Salary", value: "salary" },
-                        { label: "Business", value: "business" },
-                      ]}
-                    />
-                  </FormControl>
-                </FormItem>
-              </FormField>
+                  <FormField>
+                    <FormItem>
+                      <FormLabel>Account Type</FormLabel>
+                      <FormControl>
+                        <Select
+                          value={formData.account_type}
+                          onValueChange={(value) => updateField("account_type", value)}
+                          placeholder="Select account type"
+                          options={[
+                            { label: "Current", value: "current" },
+                            { label: "Savings", value: "savings" },
+                            { label: "Salary", value: "salary" },
+                            { label: "Business", value: "business" },
+                          ]}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  </FormField>
+                </>
+              ) : null}
             </CardContent>
           </Card>
 

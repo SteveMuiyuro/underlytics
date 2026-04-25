@@ -90,6 +90,11 @@ locals {
     "vertex-model"             = var.vertex_model
   }
 
+  configured_secret_values = {
+    for key, value in local.secret_values : key => value
+    if key != "clerk-authorized-parties"
+  }
+
   gateway_backend_url = trimsuffix(google_cloud_run_v2_service.backend.uri, "/")
 }
 
@@ -236,8 +241,13 @@ resource "google_secret_manager_secret_version" "database_url" {
   secret_data = "postgresql+psycopg2://${var.db_user}:${random_password.database_password.result}@/${var.db_name}?host=/cloudsql/${google_sql_database_instance.postgres.connection_name}"
 }
 
+resource "google_secret_manager_secret_version" "clerk_authorized_parties" {
+  secret      = google_secret_manager_secret.app["clerk-authorized-parties"].id
+  secret_data = var.clerk_authorized_parties
+}
+
 resource "google_secret_manager_secret_version" "configured" {
-  for_each = local.secret_values
+  for_each = local.configured_secret_values
 
   secret      = google_secret_manager_secret.app[each.key].id
   secret_data = each.value
@@ -287,6 +297,26 @@ resource "google_cloud_run_v2_service" "backend" {
             version = "latest"
           }
         }
+      }
+
+      env {
+        name  = "UNDERLYTICS_DATABASE_URL_SECRET_VERSION"
+        value = google_secret_manager_secret_version.database_url.version
+      }
+
+      env {
+        name = "CLERK_AUTHORIZED_PARTIES"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.app["clerk-authorized-parties"].secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      env {
+        name  = "UNDERLYTICS_CLERK_AUTHORIZED_PARTIES_SECRET_VERSION"
+        value = google_secret_manager_secret_version.clerk_authorized_parties.version
       }
 
       env {
@@ -419,6 +449,7 @@ resource "google_cloud_run_v2_service" "backend" {
   depends_on = [
     google_artifact_registry_repository.backend,
     google_secret_manager_secret_version.database_url,
+    google_secret_manager_secret_version.clerk_authorized_parties,
     google_secret_manager_secret_version.configured,
     google_secret_manager_secret_iam_member.backend_access,
   ]

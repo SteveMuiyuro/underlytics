@@ -1,3 +1,5 @@
+from contextlib import contextmanager
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -70,6 +72,7 @@ def seed_application(db: Session) -> Application:
 
 def test_build_underwriting_plan_uses_agent_output(monkeypatch):
     db = make_session()
+    observed: dict = {}
 
     def fake_run_structured_agent(*, prompt, scoped_input, output_type):
         return {
@@ -131,9 +134,42 @@ def test_build_underwriting_plan_uses_agent_output(monkeypatch):
             ],
         }
 
+    @contextmanager
+    def fake_start_agent_observability(
+        *,
+        trace_name,
+        trace_context,
+        metadata,
+        input_payload,
+        observation_type="agent",
+    ):
+        observed["trace_name"] = trace_name
+        observed["trace_context"] = trace_context
+        observed["metadata"] = metadata
+        observed["input_payload"] = input_payload
+        observed["observation_type"] = observation_type
+
+        class Observation:
+            def record_output(self, *, output=None, metadata=None, status_message=None):
+                observed["output"] = output
+                observed["output_metadata"] = metadata
+
+            def record_error(self, *, message, data=None):
+                observed["error"] = (message, data)
+
+        yield Observation()
+
     monkeypatch.setattr(
         "underlytics_api.services.planner_service._run_structured_agent",
         fake_run_structured_agent,
+    )
+    monkeypatch.setattr(
+        "underlytics_api.services.planner_service.ensure_trace_context",
+        lambda **kwargs: "planner-trace-context",
+    )
+    monkeypatch.setattr(
+        "underlytics_api.services.planner_service.start_agent_observability",
+        fake_start_agent_observability,
     )
 
     try:
@@ -146,3 +182,8 @@ def test_build_underwriting_plan_uses_agent_output(monkeypatch):
     assert len(plan.steps) == 5
     assert plan.metadata["planner_source"] == "llm"
     assert plan.metadata["planner_agent"]["model_provider"] == "vertex_ai"
+    assert observed["trace_name"] == "underlytics-planner-agent"
+    assert observed["trace_context"] == "planner-trace-context"
+    assert observed["metadata"]["agent_name"] == "planner"
+    assert observed["input_payload"]["application"]["application_number"] == "APP-PLANNER-001"
+    assert observed["output"]["planner_mode"] == "agentic_vertex"

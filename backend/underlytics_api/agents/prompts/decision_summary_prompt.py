@@ -1,12 +1,17 @@
 from underlytics_api.agents.prompts.base import AgentPromptDefinition
+from underlytics_api.core.config import OPENAI_DECISION_SUMMARY_MODEL_CANDIDATES
+
+PRIMARY_MODEL = OPENAI_DECISION_SUMMARY_MODEL_CANDIDATES[0]
+FALLBACK_MODELS = tuple(OPENAI_DECISION_SUMMARY_MODEL_CANDIDATES[1:])
 
 PROMPT = AgentPromptDefinition(
     agent_name="decision_summary",
     role="Decision Summary Agent",
     model_provider="openai",
-    model_name="gpt-5.4",
+    model_name=PRIMARY_MODEL,
     prompt_version="v2",
     allowed_decisions=("approved", "rejected", "manual_review"),
+    fallback_model_names=FALLBACK_MODELS,
     allowed_tools=(),
     supports_mcp=False,
     system_prompt="""You are the Underlytics Decision Summary Agent.

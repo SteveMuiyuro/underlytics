@@ -20,6 +20,10 @@ from underlytics_api.services.providers.resend_provider import (
     EmailDeliveryResult,
     ResendProvider,
 )
+from underlytics_api.services.tracing_service import (
+    ensure_trace_context,
+    start_agent_observability,
+)
 from underlytics_api.services.underwriting_agent_service import _run_structured_agent
 
 EMAIL_TYPES = {
@@ -29,6 +33,7 @@ EMAIL_TYPES = {
     "manual_review_final_approved",
     "manual_review_final_rejected",
 }
+EMAIL_AGENT_TRACE_NAME = "underlytics-email-agent"
 
 
 class EmailProvider(Protocol):
@@ -211,12 +216,45 @@ def generate_application_email(
             reviewer_note=reviewer_note,
         ),
     }
-    email_output = _run_structured_agent(
-        prompt=EMAIL_AGENT_PROMPT,
-        scoped_input=email_context,
-        output_type=EmailAgentOutput,
+    email_metadata = {
+        "application_id": application.id,
+        "application_number": application.application_number,
+        "email_type": email_type,
+        "reviewer_decision": reviewer_decision,
+        "agent_name": EMAIL_AGENT_PROMPT.agent_name,
+        "model_provider": EMAIL_AGENT_PROMPT.model_provider,
+        "model_name": EMAIL_AGENT_PROMPT.model_name,
+        "prompt_version": EMAIL_AGENT_PROMPT.prompt_version,
+    }
+    trace_context = ensure_trace_context(
+        seed=f"email:{application.id}:{email_type}",
+        group_id=application.id,
     )
-    structured_email = EmailAgentOutput.model_validate(email_output)
+    with start_agent_observability(
+        trace_name=EMAIL_AGENT_TRACE_NAME,
+        trace_context=trace_context,
+        metadata=email_metadata,
+        input_payload=email_context,
+    ) as observation:
+        try:
+            email_output = _run_structured_agent(
+                prompt=EMAIL_AGENT_PROMPT,
+                scoped_input=email_context,
+                output_type=EmailAgentOutput,
+            )
+            email_output.pop("__runtime", None)
+            structured_email = EmailAgentOutput.model_validate(email_output)
+        except Exception as exc:
+            observation.record_error(
+                message=str(exc),
+                data=email_metadata,
+            )
+            raise
+
+        observation.record_output(
+            output=structured_email.model_dump(),
+            metadata=email_metadata,
+        )
     return structured_email.model_dump()
 
 

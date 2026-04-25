@@ -1,3 +1,5 @@
+from contextlib import contextmanager
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -169,6 +171,84 @@ def test_generate_application_email_returns_html_for_all_email_types(monkeypatch
         db.close()
 
 
+def test_generate_application_email_records_email_agent_trace(monkeypatch):
+    db = make_session()
+    observed: dict = {}
+
+    @contextmanager
+    def fake_start_agent_observability(
+        *,
+        trace_name,
+        trace_context,
+        metadata,
+        input_payload,
+        observation_type="agent",
+    ):
+        observed["trace_name"] = trace_name
+        observed["trace_context"] = trace_context
+        observed["metadata"] = metadata
+        observed["input_payload"] = input_payload
+        observed["observation_type"] = observation_type
+
+        class Observation:
+            def record_output(self, *, output=None, metadata=None, status_message=None):
+                observed["output"] = output
+                observed["output_metadata"] = metadata
+
+            def record_error(self, *, message, data=None):
+                observed["error"] = (message, data)
+
+        yield Observation()
+
+    monkeypatch.setattr(
+        notification_service,
+        "ensure_trace_context",
+        lambda **kwargs: "email-trace-context",
+    )
+    monkeypatch.setattr(
+        notification_service,
+        "start_agent_observability",
+        fake_start_agent_observability,
+    )
+    monkeypatch.setattr(
+        notification_service,
+        "_run_structured_agent",
+        lambda **kwargs: {
+            "subject": "Approved",
+            "html_body": "<!doctype html><html><body>Approved</body></html>",
+        },
+    )
+
+    try:
+        application = seed_application(db)
+        add_decision_output(
+            db,
+            application_id=application.id,
+            decision="approved",
+            reasoning="Application meets underwriting thresholds.",
+        )
+        context = notification_service._load_application_email_context(
+            db,
+            application_id=application.id,
+        )
+        payload = notification_service.generate_application_email(
+            application=context.application,
+            agent_outputs=context.agent_outputs,
+            email_type="agent_final_approved",
+        )
+    finally:
+        db.close()
+
+    assert payload["subject"] == "Approved"
+    assert observed["trace_name"] == "underlytics-email-agent"
+    assert observed["trace_context"] == "email-trace-context"
+    assert observed["metadata"]["email_type"] == "agent_final_approved"
+    assert observed["metadata"]["model_provider"] == "vertex_ai"
+    assert observed["metadata"]["model_name"] == "gemini-2.5-flash"
+    assert observed["input_payload"]["application"]["application_number"] == "APP-NOTIFY-001"
+    assert observed["output"]["subject"] == "Approved"
+
+
 def test_send_automated_decision_notification_creates_sent_log(monkeypatch):
     db = make_session()
     provider = FakeProvider()
@@ -202,8 +282,64 @@ def test_send_automated_decision_notification_creates_sent_log(monkeypatch):
     assert log is not None
     assert log.status == "sent"
     assert log.template_key == "agent_final_approved"
+    assert log.recipient_email == "applicant@example.com"
     assert provider.sent[0][0] == "applicant@example.com"
     assert "<html>" in provider.sent[0][2]
+
+
+def test_load_application_email_context_uses_applicant_user_email():
+    db = make_session()
+
+    try:
+        application = seed_application(db, email="resolved@example.com")
+        context = notification_service._load_application_email_context(
+            db,
+            application_id=application.id,
+        )
+    finally:
+        db.close()
+
+    assert context.applicant.email == "resolved@example.com"
+
+
+def test_send_automated_rejected_notification_uses_applicant_email(monkeypatch):
+    db = make_session()
+    provider = FakeProvider()
+    monkeypatch.setattr(notification_service, "_build_email_provider", lambda: provider)
+    monkeypatch.setattr(
+        notification_service,
+        "_run_structured_agent",
+        lambda **kwargs: {
+            "subject": "Rejected",
+            "html_body": "<!doctype html><html><body>Rejected</body></html>",
+        },
+    )
+
+    try:
+        application = seed_application(db, email="rejected@example.com")
+        application.status = "rejected"
+        db.add(application)
+        db.commit()
+        add_decision_output(
+            db,
+            application_id=application.id,
+            decision="rejected",
+            reasoning="Application does not meet underwriting thresholds.",
+        )
+
+        log = notification_service.send_automated_decision_notification(
+            db,
+            application_id=application.id,
+            decision="rejected",
+        )
+    finally:
+        db.close()
+
+    assert log is not None
+    assert log.status == "sent"
+    assert log.template_key == "agent_final_rejected"
+    assert log.recipient_email == "rejected@example.com"
+    assert provider.sent[0][0] == "rejected@example.com"
 
 
 def test_send_manual_review_escalation_notification_is_deduplicated(monkeypatch):
@@ -301,6 +437,8 @@ def test_send_manual_review_completed_notification_uses_final_email_type(monkeyp
     assert log is not None
     assert log.status == "sent"
     assert log.template_key == "manual_review_final_approved"
+    assert log.recipient_email == "applicant@example.com"
+    assert provider.sent[0][0] == "applicant@example.com"
     assert "Application approved" in provider.sent[0][2]
 
 
@@ -322,6 +460,45 @@ def test_send_application_email_skips_when_recipient_is_missing():
 
     assert log.status == "skipped"
     assert log.error_message == "Recipient email is missing"
+
+
+def test_send_automated_decision_notification_skips_when_applicant_email_missing(
+    monkeypatch,
+):
+    db = make_session()
+    provider = FakeProvider()
+    monkeypatch.setattr(notification_service, "_build_email_provider", lambda: provider)
+    monkeypatch.setattr(
+        notification_service,
+        "_run_structured_agent",
+        lambda **kwargs: {
+            "subject": "Approved",
+            "html_body": "<!doctype html><html><body>Approved</body></html>",
+        },
+    )
+
+    try:
+        application = seed_application(db, email="")
+        add_decision_output(
+            db,
+            application_id=application.id,
+            decision="approved",
+            reasoning="Application meets underwriting thresholds.",
+        )
+
+        log = notification_service.send_automated_decision_notification(
+            db,
+            application_id=application.id,
+            decision="approved",
+        )
+    finally:
+        db.close()
+
+    assert log is not None
+    assert log.status == "skipped"
+    assert log.recipient_email == ""
+    assert log.error_message == "Recipient email is missing"
+    assert provider.sent == []
 
 
 def test_send_application_email_marks_failed_provider_attempt(monkeypatch):

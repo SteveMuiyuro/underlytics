@@ -7,9 +7,14 @@ from underlytics_api.agents.prompts import PLANNER_PROMPT
 from underlytics_api.models.application import Application
 from underlytics_api.models.application_document import ApplicationDocument
 from underlytics_api.schemas.agent_execution import PlannerPlanOutput
+from underlytics_api.services.tracing_service import (
+    ensure_trace_context,
+    start_agent_observability,
+)
 from underlytics_api.services.underwriting_agent_service import _run_structured_agent
 
 REQUIRED_DOCUMENT_TYPES = ("id_document", "payslip", "bank_statement")
+PLANNER_TRACE_NAME = "underlytics-planner-agent"
 
 
 @dataclass
@@ -81,34 +86,67 @@ def build_underwriting_plan(db: Session, application: Application) -> WorkflowPl
             "fraud_verification",
         ],
     }
-    planner_output = _run_structured_agent(
-        prompt=PLANNER_PROMPT,
-        scoped_input=planner_input,
-        output_type=PlannerPlanOutput,
-    )
-    structured_plan = PlannerPlanOutput.model_validate(planner_output)
-
-    required_workers = {
-        "document_analysis",
-        "policy_retrieval",
-        "risk_assessment",
-        "fraud_verification",
-        "decision_summary",
+    planner_metadata = {
+        "application_id": application.id,
+        "application_number": application.application_number,
+        "agent_name": PLANNER_PROMPT.agent_name,
+        "model_provider": PLANNER_PROMPT.model_provider,
+        "model_name": PLANNER_PROMPT.model_name,
+        "prompt_version": PLANNER_PROMPT.prompt_version,
     }
-    planned_workers = {step.worker_name for step in structured_plan.steps}
-    if planned_workers != required_workers:
-        raise ValueError("Planner output must include each required worker exactly once")
-
-    decision_summary_step = next(
-        step for step in structured_plan.steps if step.worker_name == "decision_summary"
+    trace_context = ensure_trace_context(
+        seed=f"planner:{application.id}",
+        group_id=application.id,
     )
-    if set(decision_summary_step.dependencies) != {
-        "document_analysis",
-        "policy_retrieval",
-        "risk_assessment",
-        "fraud_verification",
-    }:
-        raise ValueError("Decision summary must depend on all specialist workers")
+    with start_agent_observability(
+        trace_name=PLANNER_TRACE_NAME,
+        trace_context=trace_context,
+        metadata=planner_metadata,
+        input_payload=planner_input,
+    ) as observation:
+        try:
+            planner_output = _run_structured_agent(
+                prompt=PLANNER_PROMPT,
+                scoped_input=planner_input,
+                output_type=PlannerPlanOutput,
+            )
+            structured_plan = PlannerPlanOutput.model_validate(planner_output)
+        except Exception as exc:
+            observation.record_error(
+                message=str(exc),
+                data=planner_metadata,
+            )
+            raise
+
+        required_workers = {
+            "document_analysis",
+            "policy_retrieval",
+            "risk_assessment",
+            "fraud_verification",
+            "decision_summary",
+        }
+        planned_workers = {step.worker_name for step in structured_plan.steps}
+        if planned_workers != required_workers:
+            raise ValueError("Planner output must include each required worker exactly once")
+
+        decision_summary_step = next(
+            step for step in structured_plan.steps if step.worker_name == "decision_summary"
+        )
+        if set(decision_summary_step.dependencies) != {
+            "document_analysis",
+            "policy_retrieval",
+            "risk_assessment",
+            "fraud_verification",
+        }:
+            raise ValueError("Decision summary must depend on all specialist workers")
+
+        observation.record_output(
+            output=structured_plan.model_dump(exclude_none=True),
+            metadata={
+                **planner_metadata,
+                "planned_workers": sorted(planned_workers),
+            },
+        )
 
     steps = [
         PlannedStep(

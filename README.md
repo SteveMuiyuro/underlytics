@@ -356,9 +356,8 @@ Core principles:
 
 Current provider split:
 
-- Vertex AI Gemini 2.5 Flash for planner and specialist workers
-- OpenAI GPT-5.4 for `decision_summary`
-- OpenAI GPT-5.4 Mini for `email_agent`
+- Vertex AI Gemini 2.5 Flash for `planner`, `document_analysis`, `policy_retrieval`, `risk_assessment`, `fraud_verification`, and `email_agent`
+- OpenAI GPT-5.4 for `decision_summary`, with fallback to `gpt-5.3` and `gpt-5.2` when the preferred model is unavailable
 
 The runtime also includes:
 

@@ -123,7 +123,7 @@ jobs:
       TF_VAR_clerk_jwt_issuer: ${{ secrets.TF_VAR_CLERK_JWT_ISSUER }}
       TF_VAR_clerk_publishable_key: ${{ secrets.TF_VAR_CLERK_PUBLISHABLE_KEY }}
       TF_VAR_clerk_secret_key: ${{ secrets.TF_VAR_CLERK_SECRET_KEY }}
-      TF_VAR_clerk_authorized_parties: ${{ secrets.TF_VAR_CLERK_AUTHORIZED_PARTIES }}
+      TF_VAR_clerk_authorized_parties: ${{ vars.CLERK_AUTHORIZED_PARTIES || 'http://localhost:3000,https://underlytics.vercel.app,https://underlytics-steve-mwangis-projects.vercel.app,https://underlytics-git-main-steve-mwangis-projects.vercel.app' }}
       TF_VAR_clerk_webhook_secret: ${{ secrets.TF_VAR_CLERK_WEBHOOK_SECRET }}
       TF_VAR_langfuse_public_key: ${{ secrets.TF_VAR_LANGFUSE_PUBLIC_KEY }}
       TF_VAR_langfuse_secret_key: ${{ secrets.TF_VAR_LANGFUSE_SECRET_KEY }}

@@ -1,4 +1,5 @@
 import json
+from contextlib import contextmanager
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -98,6 +99,7 @@ def seed_application(db: Session) -> Application:
 
 def test_run_workflow_plan_records_agent_evaluations(monkeypatch):
     db = make_session()
+    observed_guardrail: dict = {}
 
     def fake_planner_run(*, prompt, scoped_input, output_type):
         return {
@@ -248,6 +250,22 @@ def test_run_workflow_plan_records_agent_evaluations(monkeypatch):
             self.scoped_input = {"input": {"tool_evidence": tool_evidence}}
             self.execution_mode = "autonomous_llm"
 
+    @contextmanager
+    def fake_start_guardrail_observability(*, trace_core, name, metadata):
+        observed_guardrail["trace_core"] = trace_core
+        observed_guardrail["name"] = name
+        observed_guardrail["metadata"] = metadata
+
+        class Observation:
+            def record_output(self, *, output=None, metadata=None, status_message=None):
+                observed_guardrail["output"] = output
+                observed_guardrail["output_metadata"] = metadata
+
+            def record_error(self, *, message, data=None):
+                observed_guardrail["error"] = (message, data)
+
+        yield Observation()
+
     monkeypatch.setattr(
         "underlytics_api.services.planner_service._run_structured_agent",
         fake_planner_run,
@@ -263,6 +281,10 @@ def test_run_workflow_plan_records_agent_evaluations(monkeypatch):
     monkeypatch.setattr(
         "underlytics_api.services.worker_service.send_manual_review_escalation_notification",
         lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "underlytics_api.services.worker_service.start_guardrail_observability",
+        fake_start_guardrail_observability,
     )
 
     try:
@@ -295,3 +317,6 @@ def test_run_workflow_plan_records_agent_evaluations(monkeypatch):
     assert json.loads(policy_eval.evaluation_json)["tool_sources"] == [
         "internal_policy_catalog"
     ]
+    assert observed_guardrail["name"] == "decision_summary_guardrails"
+    assert observed_guardrail["metadata"]["proposed_decision"] == "approved"
+    assert observed_guardrail["output"]["final_decision"] == "manual_review"

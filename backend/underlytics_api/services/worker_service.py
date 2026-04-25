@@ -23,6 +23,7 @@ from underlytics_api.services.notification_service import (
 from underlytics_api.services.orchestrator_service import get_ready_steps
 from underlytics_api.services.tracing_service import (
     ensure_workflow_trace_context,
+    start_guardrail_observability,
     start_step_observability,
     start_workflow_observability,
 )
@@ -249,13 +250,54 @@ def _execute_workflow_step(
             validate_agent_output(step.worker_name, output)
 
         if step.worker_name == "decision_summary":
-            final_decision = enforce_decision_guardrails(
-                document_output=output_map.get("document_analysis", {}),
-                policy_output=output_map.get("policy_retrieval", {}),
-                risk_output=output_map.get("risk_assessment", {}),
-                fraud_output=output_map.get("fraud_verification", {}),
-                proposed_decision=proposed_decision,
-            )
+            guardrail_metadata = {
+                "workflow_step_id": step.id,
+                "attempt_id": attempt.id,
+                "application_id": application.id,
+                "proposed_decision": proposed_decision,
+                "document_decision": output_map.get("document_analysis", {}).get("decision"),
+                "policy_decision": output_map.get("policy_retrieval", {}).get("decision"),
+                "risk_decision": output_map.get("risk_assessment", {}).get("decision"),
+                "fraud_decision": output_map.get("fraud_verification", {}).get("decision"),
+            }
+            if trace_core:
+                with start_guardrail_observability(
+                    trace_core=trace_core,
+                    name="decision_summary_guardrails",
+                    metadata=guardrail_metadata,
+                ) as observation:
+                    try:
+                        final_decision = enforce_decision_guardrails(
+                            document_output=output_map.get("document_analysis", {}),
+                            policy_output=output_map.get("policy_retrieval", {}),
+                            risk_output=output_map.get("risk_assessment", {}),
+                            fraud_output=output_map.get("fraud_verification", {}),
+                            proposed_decision=proposed_decision,
+                        )
+                        observation.record_output(
+                            output={
+                                "proposed_decision": proposed_decision,
+                                "final_decision": final_decision,
+                            },
+                            metadata={
+                                **guardrail_metadata,
+                                "guardrail_adjusted": final_decision != proposed_decision,
+                            },
+                        )
+                    except Exception as exc:
+                        observation.record_error(
+                            message=str(exc),
+                            data=guardrail_metadata,
+                        )
+                        raise
+            else:
+                final_decision = enforce_decision_guardrails(
+                    document_output=output_map.get("document_analysis", {}),
+                    policy_output=output_map.get("policy_retrieval", {}),
+                    risk_output=output_map.get("risk_assessment", {}),
+                    fraud_output=output_map.get("fraud_verification", {}),
+                    proposed_decision=proposed_decision,
+                )
             if final_decision != proposed_decision:
                 output["flags"] = output.get("flags", []) + [
                     f"guardrail_adjusted_to_{final_decision}"

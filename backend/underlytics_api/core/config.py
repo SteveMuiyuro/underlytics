@@ -67,3 +67,7 @@ CLERK_AUTHORIZED_PARTIES = [
     for party in os.getenv("CLERK_AUTHORIZED_PARTIES", "").split(",")
     if party.strip()
 ]
+OPENAI_DECISION_SUMMARY_MODEL_CANDIDATES = _csv_env(
+    "OPENAI_DECISION_SUMMARY_MODEL_CANDIDATES",
+    ["gpt-5.4", "gpt-5.3", "gpt-5.2"],
+)

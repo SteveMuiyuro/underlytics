@@ -3,8 +3,8 @@ from underlytics_api.agents.prompts.base import AgentPromptDefinition
 PROMPT = AgentPromptDefinition(
     agent_name="email_agent",
     role="Email Agent",
-    model_provider="openai",
-    model_name="gpt-5.4-mini",
+    model_provider="vertex_ai",
+    model_name="gemini-2.5-flash",
     prompt_version="v2",
     allowed_decisions=(),
     allowed_tools=(),

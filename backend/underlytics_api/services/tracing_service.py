@@ -103,8 +103,8 @@ def _build_openai_trace_id(trace_core: str) -> str:
     return f"trace_{trace_core}"
 
 
-def ensure_workflow_trace_context(*, plan_id: str, group_id: str) -> WorkflowTraceContext:
-    trace_core = _build_trace_core(f"workflow_plan:{plan_id}")
+def ensure_trace_context(*, seed: str, group_id: str) -> WorkflowTraceContext:
+    trace_core = _build_trace_core(seed)
     return WorkflowTraceContext(
         trace_core=trace_core,
         openai_trace_id=_build_openai_trace_id(trace_core),
@@ -112,12 +112,18 @@ def ensure_workflow_trace_context(*, plan_id: str, group_id: str) -> WorkflowTra
     )
 
 
+def ensure_workflow_trace_context(*, plan_id: str, group_id: str) -> WorkflowTraceContext:
+    return ensure_trace_context(seed=f"workflow_plan:{plan_id}", group_id=group_id)
+
+
 @contextmanager
-def start_workflow_observability(
+def _start_trace_observability(
     *,
-    workflow: WorkflowTraceContext,
+    trace_name: str,
+    trace_context: WorkflowTraceContext,
     metadata: dict[str, Any],
     input_payload: dict[str, Any],
+    observation_type: str,
 ):
     langfuse_client = _get_langfuse_client()
 
@@ -125,9 +131,9 @@ def start_workflow_observability(
         if _openai_tracing_enabled():
             stack.enter_context(
                 trace(
-                    WORKFLOW_TRACE_NAME,
-                    trace_id=workflow.openai_trace_id,
-                    group_id=workflow.group_id,
+                    trace_name,
+                    trace_id=trace_context.openai_trace_id,
+                    group_id=trace_context.group_id,
                     metadata=metadata,
                 )
             )
@@ -136,9 +142,9 @@ def start_workflow_observability(
         if langfuse_client:
             langfuse_observation = stack.enter_context(
                 langfuse_client.start_as_current_observation(
-                    name=WORKFLOW_TRACE_NAME,
-                    as_type="span",
-                    trace_context={"trace_id": workflow.trace_core},
+                    name=trace_name,
+                    as_type=observation_type,
+                    trace_context={"trace_id": trace_context.trace_core},
                     input=input_payload,
                     metadata=metadata,
                 )
@@ -158,6 +164,42 @@ def start_workflow_observability(
                     flush_traces()
                 except Exception:
                     logger.exception("Failed to flush OpenAI traces")
+
+
+@contextmanager
+def start_workflow_observability(
+    *,
+    workflow: WorkflowTraceContext,
+    metadata: dict[str, Any],
+    input_payload: dict[str, Any],
+):
+    with _start_trace_observability(
+        trace_name=WORKFLOW_TRACE_NAME,
+        trace_context=workflow,
+        metadata=metadata,
+        input_payload=input_payload,
+        observation_type="span",
+    ) as observation:
+        yield observation
+
+
+@contextmanager
+def start_agent_observability(
+    *,
+    trace_name: str,
+    trace_context: WorkflowTraceContext,
+    metadata: dict[str, Any],
+    input_payload: dict[str, Any],
+    observation_type: str = "agent",
+):
+    with _start_trace_observability(
+        trace_name=trace_name,
+        trace_context=trace_context,
+        metadata=metadata,
+        input_payload=input_payload,
+        observation_type=observation_type,
+    ) as observation:
+        yield observation
 
 
 @contextmanager

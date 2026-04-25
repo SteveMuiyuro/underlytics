@@ -46,3 +46,4 @@ override.tf.json
 # Build artifacts
 dist/
 build/
+.vercel

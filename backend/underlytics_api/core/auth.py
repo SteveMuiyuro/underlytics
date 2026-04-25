@@ -91,6 +91,14 @@ def _extract_bearer_token(authorization: str | None) -> str | None:
     return value
 
 
+def _normalize_authorized_party(value: str | None) -> str | None:
+    if value is None:
+        return None
+
+    normalized = value.strip().rstrip("/")
+    return normalized or None
+
+
 def _verify_clerk_token(token: str) -> dict[str, Any]:
     issuer = _get_expected_issuer()
 
@@ -114,8 +122,16 @@ def _verify_clerk_token(token: str) -> dict[str, Any]:
         raise HTTPException(status_code=401, detail="Invalid Clerk bearer token") from exc
 
     if CLERK_AUTHORIZED_PARTIES:
-        authorized_party = claims.get("azp")
-        if authorized_party not in CLERK_AUTHORIZED_PARTIES:
+        authorized_party = _normalize_authorized_party(claims.get("azp"))
+        allowed_parties = {
+            normalized
+            for normalized in (
+                _normalize_authorized_party(candidate)
+                for candidate in CLERK_AUTHORIZED_PARTIES
+            )
+            if normalized
+        }
+        if authorized_party not in allowed_parties:
             raise HTTPException(
                 status_code=401,
                 detail="Clerk bearer token was issued for an unexpected party",
