@@ -4,6 +4,7 @@ import traceback
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
 from underlytics_api.api.agent_outputs import router as agent_outputs_router
 from underlytics_api.api.applications import router as applications_router
@@ -64,6 +65,21 @@ def root():
 @app.get("/healthz")
 def healthcheck():
     return {"status": "ok"}
+
+
+@app.get("/debug/db")
+def debug_db():
+    db = SessionLocal()
+    try:
+        result = db.execute(text("SELECT 1")).scalar()
+        user_count = db.execute(text("SELECT COUNT(*) FROM users")).scalar()
+        return {
+            "database": "ok",
+            "select_1": result,
+            "user_count": user_count,
+        }
+    finally:
+        db.close()
 
 
 app.include_router(users_router)
