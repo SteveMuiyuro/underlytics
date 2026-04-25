@@ -1,4 +1,5 @@
 import logging
+import traceback
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,6 +33,7 @@ app.add_middleware(
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
+    traceback.print_exc()
     logger.exception(
         "Unhandled backend exception on %s %s",
         request.method,
