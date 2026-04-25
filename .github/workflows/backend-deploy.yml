@@ -119,9 +119,9 @@ jobs:
       TF_VAR_cors_allowed_origins: ${{ vars.CORS_ALLOWED_ORIGINS || 'http://localhost:3000,http://127.0.0.1:3000,https://underlytics.vercel.app' }}
 
       TF_VAR_admin_bootstrap_secret: ${{ secrets.TF_VAR_ADMIN_BOOTSTRAP_SECRET }}
-      TF_VAR_clerk_jwt_key: ${{ secrets.TF_VAR_CLERK_JWT_KEY }}
-      TF_VAR_clerk_jwt_issuer: ${{ secrets.TF_VAR_CLERK_JWT_ISSUER }}
-      TF_VAR_clerk_publishable_key: ${{ secrets.TF_VAR_CLERK_PUBLISHABLE_KEY }}
+      TF_VAR_clerk_jwt_key: ""
+      TF_VAR_clerk_jwt_issuer: ${{ secrets.TF_VAR_CLERK_JWT_ISSUER || 'https://primary-grouse-65.clerk.accounts.dev' }}
+      TF_VAR_clerk_publishable_key: ${{ secrets.TF_VAR_CLERK_PUBLISHABLE_KEY || 'pk_test_cHJpbWFyeS1ncm91c2UtNjUuY2xlcmsuYWNjb3VudHMuZGV2JA' }}
       TF_VAR_clerk_secret_key: ${{ secrets.TF_VAR_CLERK_SECRET_KEY }}
       TF_VAR_clerk_authorized_parties: ${{ vars.CLERK_AUTHORIZED_PARTIES || 'http://localhost:3000,https://underlytics.vercel.app,https://underlytics-steve-mwangis-projects.vercel.app,https://underlytics-git-main-steve-mwangis-projects.vercel.app' }}
       TF_VAR_clerk_webhook_secret: ${{ secrets.TF_VAR_CLERK_WEBHOOK_SECRET }}
@@ -193,6 +193,25 @@ jobs:
 
           curl -fsS "${API_GATEWAY_URL}/" > /tmp/api-gateway-root.json
           curl -fsS "${BACKEND_CLOUD_RUN_URL}/" > /tmp/backend-root.json
+
+      - name: Verify Clerk runtime config
+        run: |
+          CLERK_ISSUER="$(gcloud secrets versions access latest --secret=clerk-jwt-issuer --project="${GCP_PROJECT_ID}")"
+          CLERK_PUBLISHABLE_KEY="$(gcloud secrets versions access latest --secret=clerk-publishable-key --project="${GCP_PROJECT_ID}")"
+
+          test "${CLERK_ISSUER}" = "https://primary-grouse-65.clerk.accounts.dev"
+          echo "${CLERK_PUBLISHABLE_KEY}" | grep -Eq '^pk_(test|live)_'
+
+          CLOUD_RUN_CLERK_ENV="$(gcloud run services describe underlytics-backend --project="${GCP_PROJECT_ID}" --region="${GCP_REGION}" --format='yaml(spec.template.spec.containers[0].env)')"
+
+          echo "${CLOUD_RUN_CLERK_ENV}" | grep -q "CLERK_JWT_ISSUER"
+          echo "${CLOUD_RUN_CLERK_ENV}" | grep -q "CLERK_PUBLISHABLE_KEY"
+          echo "${CLOUD_RUN_CLERK_ENV}" | grep -q "CLERK_AUTHORIZED_PARTIES"
+
+          if echo "${CLOUD_RUN_CLERK_ENV}" | grep -q "CLERK_JWT_KEY"; then
+            echo "CLERK_JWT_KEY should not be configured when using JWKS issuer verification."
+            exit 1
+          fi
 
       - name: Publish deployment summary
         run: |

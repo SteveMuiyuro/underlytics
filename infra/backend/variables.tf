@@ -58,24 +58,41 @@ variable "admin_bootstrap_secret" {
 }
 
 variable "clerk_jwt_key" {
-  description = "Optional Clerk JWT verification key."
+  description = "Optional Clerk JWT PEM public key. Leave empty to use Clerk JWKS issuer verification."
   type        = string
   sensitive   = true
   default     = ""
 }
 
 variable "clerk_jwt_issuer" {
-  description = "Optional Clerk JWT issuer override."
+  description = "Clerk JWT issuer root URL. Must not be the JWKS endpoint."
   type        = string
   sensitive   = true
-  default     = ""
+  default     = "https://primary-grouse-65.clerk.accounts.dev"
+
+  validation {
+    condition = (
+      trimspace(nonsensitive(var.clerk_jwt_issuer)) != "" &&
+      startswith(nonsensitive(var.clerk_jwt_issuer), "https://") &&
+      !strcontains(nonsensitive(var.clerk_jwt_issuer), "/.well-known/jwks.json")
+    )
+    error_message = "clerk_jwt_issuer must be a non-empty issuer root URL, for example https://primary-grouse-65.clerk.accounts.dev, not the JWKS URL."
+  }
 }
 
 variable "clerk_publishable_key" {
   description = "Clerk publishable key used by backend auth fallback logic."
   type        = string
   sensitive   = true
-  default     = ""
+  default     = "pk_test_cHJpbWFyeS1ncm91c2UtNjUuY2xlcmsuYWNjb3VudHMuZGV2JA"
+
+  validation {
+    condition = (
+      startswith(nonsensitive(var.clerk_publishable_key), "pk_test_") ||
+      startswith(nonsensitive(var.clerk_publishable_key), "pk_live_")
+    )
+    error_message = "clerk_publishable_key must start with pk_test_ or pk_live_."
+  }
 }
 
 variable "clerk_secret_key" {
