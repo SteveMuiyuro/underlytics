@@ -1,8 +1,8 @@
 import logging
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import text
 
 from underlytics_api.api.agent_outputs import router as agent_outputs_router
 from underlytics_api.api.applications import router as applications_router
@@ -30,24 +30,10 @@ app.add_middleware(
 )
 
 
-@app.exception_handler(Exception)
-async def unhandled_exception_handler(request: Request, exc: Exception):
-    logger.exception(
-        "Unhandled backend exception on %s %s",
-        request.method,
-        request.url.path,
-    )
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal server error"},
-    )
-
-
 @app.on_event("startup")
 def on_startup():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
-
     try:
         ensure_default_loan_products(db)
     finally:
@@ -62,6 +48,16 @@ def root():
 @app.get("/healthz")
 def healthcheck():
     return {"status": "ok"}
+
+
+# Optional: keep only if you're actively debugging
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled backend exception")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
 
 
 app.include_router(users_router)
