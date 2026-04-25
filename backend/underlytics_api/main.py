@@ -1,5 +1,8 @@
-from fastapi import FastAPI
+import logging
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from underlytics_api.api.agent_outputs import router as agent_outputs_router
 from underlytics_api.api.applications import router as applications_router
@@ -14,6 +17,8 @@ from underlytics_api.db.database import SessionLocal, engine
 from underlytics_api.models.base import Base
 from underlytics_api.services.loan_product_service import ensure_default_loan_products
 
+logger = logging.getLogger("underlytics_api")
+
 app = FastAPI(title="Underlytics API")
 
 app.add_middleware(
@@ -23,6 +28,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception(
+        "Unhandled backend exception on %s %s",
+        request.method,
+        request.url.path,
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
 
 
 @app.on_event("startup")
