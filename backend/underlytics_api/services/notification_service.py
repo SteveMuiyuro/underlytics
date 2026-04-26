@@ -80,12 +80,13 @@ def _normalize_sentence(value: str | None, fallback: str) -> str:
 
 
 def _applicant_display_name(applicant: User) -> str:
-    for field_name in ("full_name", "name", "first_name"):
+    for field_name in ("first_name", "full_name", "name"):
         value = getattr(applicant, field_name, None)
         if value:
-            return str(value).strip()
+            name = str(value).strip()
+            return name.split()[0]  # ✅ take first name only
 
-    return applicant.email
+    return applicant.email.split("@")[0]
 
 
 def _applicant_safe_reasoning(
