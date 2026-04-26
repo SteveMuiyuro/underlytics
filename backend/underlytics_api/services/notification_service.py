@@ -79,6 +79,15 @@ def _normalize_sentence(value: str | None, fallback: str) -> str:
     return normalized
 
 
+def _applicant_display_name(applicant: User) -> str:
+    for field_name in ("full_name", "name", "first_name"):
+        value = getattr(applicant, field_name, None)
+        if value:
+            return str(value).strip()
+
+    return applicant.email
+
+
 def _applicant_safe_reasoning(
     *,
     decision_output: AgentOutput | None,
@@ -176,6 +185,7 @@ def _existing_sent_log(
 def generate_application_email(
     *,
     application: Application,
+    applicant: User,
     agent_outputs: list[AgentOutput],
     email_type: str,
     reviewer_note: str | None = None,
@@ -192,6 +202,10 @@ def generate_application_email(
     flags = _coerce_flags(decision_output.flags if decision_output else None)
 
     email_context = {
+        "applicant": {
+            "name": _applicant_display_name(applicant),
+            "email": applicant.email,
+        },
         "application": {
             "application_number": application.application_number,
             "requested_amount": application.requested_amount,
@@ -345,6 +359,7 @@ def send_automated_decision_notification(
 
     email_payload = generate_application_email(
         application=context.application,
+        applicant=context.applicant,
         agent_outputs=context.agent_outputs,
         email_type=email_type,
     )
@@ -387,6 +402,7 @@ def send_manual_review_escalation_notification(
 
     email_payload = generate_application_email(
         application=context.application,
+        applicant=context.applicant,
         agent_outputs=context.agent_outputs,
         email_type=email_type,
     )
@@ -447,6 +463,7 @@ def send_manual_review_completed_notification(
 
     email_payload = generate_application_email(
         application=context.application,
+        applicant=context.applicant,
         agent_outputs=context.agent_outputs,
         email_type=email_type,
         reviewer_note=resolution_action.note,

@@ -159,12 +159,13 @@ def test_generate_application_email_returns_html_for_all_email_types(monkeypatch
         )
         for email_type in sorted(notification_service.EMAIL_TYPES):
             payload = notification_service.generate_application_email(
-                application=context.application,
-                agent_outputs=context.agent_outputs,
-                email_type=email_type,
-                reviewer_note="Approved after confirming supporting bank statements.",
-                reviewer_decision="approved",
-            )
+                        application=context.application,
+                        applicant=context.applicant,
+                        agent_outputs=context.agent_outputs,
+                        email_type=email_type,
+                        reviewer_note="Approved after confirming supporting bank statements.",
+                        reviewer_decision="approved",
+                    )
             assert payload["subject"]
             assert payload["html_body"].startswith("<!doctype html>")
     finally:
@@ -233,6 +234,7 @@ def test_generate_application_email_records_email_agent_trace(monkeypatch):
         )
         payload = notification_service.generate_application_email(
             application=context.application,
+            applicant=context.applicant,
             agent_outputs=context.agent_outputs,
             email_type="agent_final_approved",
         )
