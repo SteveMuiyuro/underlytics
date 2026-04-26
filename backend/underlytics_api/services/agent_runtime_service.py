@@ -10,6 +10,8 @@ from pydantic import BaseModel
 from underlytics_api.agents.prompts.base import AgentPromptDefinition
 from underlytics_api.core.config import GOOGLE_CLOUD_LOCATION, GOOGLE_CLOUD_PROJECT
 
+MAX_AGENT_ATTEMPTS = 3
+
 
 def _is_test_or_deterministic_mode() -> bool:
     return bool(
@@ -47,7 +49,6 @@ def _runtime_metadata(
 
 
 def _fallback_structured_output(prompt: AgentPromptDefinition) -> dict[str, Any]:
-    # ---------- PLANNER ----------
     if prompt.agent_name == "planner":
         return {
             "planner_mode": "deterministic",
@@ -91,7 +92,6 @@ def _fallback_structured_output(prompt: AgentPromptDefinition) -> dict[str, Any]
             ],
         }
 
-    # ---------- EMAIL AGENT ----------
     if prompt.agent_name == "email_agent":
         return {
             "subject": "Your loan application update",
@@ -101,7 +101,6 @@ def _fallback_structured_output(prompt: AgentPromptDefinition) -> dict[str, Any]
             ),
         }
 
-    # ---------- OTHER AGENTS ----------
     fallback_decisions = {
         "document_analysis": "documents_complete",
         "policy_retrieval": "policy_match",
@@ -115,7 +114,7 @@ def _fallback_structured_output(prompt: AgentPromptDefinition) -> dict[str, Any]
         "confidence": 0.8,
         "decision": fallback_decisions.get(prompt.agent_name, "low"),
         "flags": [],
-        "reasoning": "Fallback deterministic response for test environment.",
+        "reasoning": "Fallback response used because the model returned invalid structured output.",
     }
 
 
@@ -143,6 +142,21 @@ def _is_openai_model_unavailable_error(exc: Exception) -> bool:
     return "model" in message and any(marker in message for marker in unavailable_markers)
 
 
+def _is_structured_output_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    markers = (
+        "json",
+        "parse",
+        "parsing",
+        "validation",
+        "invalid",
+        "eof",
+        "final_output",
+        "structured output",
+    )
+    return any(marker in message for marker in markers)
+
+
 def _run_openai_structured_agent(
     *,
     prompt: AgentPromptDefinition,
@@ -157,68 +171,58 @@ def _run_openai_structured_agent(
     last_error: Exception | None = None
 
     for index, model_name in enumerate(model_candidates):
-        try:
-            agent = Agent(
-                name=prompt.role,
-                instructions=prompt.system_prompt,
-                model=model_name,
-                model_settings=ModelSettings(
-                    temperature=0.15,
-                    max_tokens=1400,
-                ),
-                output_type=AgentOutputSchema(
+        agent = Agent(
+            name=prompt.role,
+            instructions=prompt.system_prompt,
+            model=model_name,
+            model_settings=ModelSettings(
+                temperature=0.1,
+                max_tokens=2400,
+            ),
+            output_type=AgentOutputSchema(
+                output_type,
+                strict_json_schema=False,
+            ),
+        )
+
+        for _ in range(MAX_AGENT_ATTEMPTS):
+            try:
+                result = Runner.run_sync(agent, payload)
+                output = result.final_output_as(
                     output_type,
-                    strict_json_schema=False,
-                ),
-            )
+                    raise_if_incorrect_type=True,
+                )
 
-            result = Runner.run_sync(agent, payload)
-            output = result.final_output_as(output_type, raise_if_incorrect_type=True)
+                return {
+                    **output.model_dump(exclude_none=True),
+                    **_runtime_metadata(
+                        provider=prompt.model_provider,
+                        model_name=model_name,
+                    ),
+                }
+            except Exception as exc:
+                last_error = exc
+                if not _is_structured_output_error(exc):
+                    break
 
+        is_last_candidate = index == len(model_candidates) - 1
+
+        if is_last_candidate or not _is_openai_model_unavailable_error(
+            last_error or RuntimeError("Unknown OpenAI agent error")
+        ):
             return {
-                **output.model_dump(exclude_none=True),
+                **_fallback_structured_output(prompt),
                 **_runtime_metadata(
-                    provider=prompt.model_provider,
-                    model_name=model_name,
+                    provider="deterministic_fallback",
+                    model_name=f"{prompt.agent_name}_fallback",
                 ),
             }
-
-        except Exception as exc:
-            last_error = exc
-
-            # 🔥 RETRY ON JSON / PARSE ERRORS
-            if "json" in str(exc).lower() or "parse" in str(exc).lower():
-                try:
-                    result = Runner.run_sync(agent, payload)
-                    output = result.final_output_as(output_type, raise_if_incorrect_type=True)
-
-                    return {
-                        **output.model_dump(exclude_none=True),
-                        **_runtime_metadata(
-                            provider=prompt.model_provider,
-                            model_name=model_name,
-                        ),
-                    }
-                except Exception:
-                    pass  # fall through
-
-            is_last_candidate = index == len(model_candidates) - 1
-
-            if is_last_candidate or not _is_openai_model_unavailable_error(exc):
-                if prompt.agent_name == "decision_summary":
-                    return {
-                        **_fallback_structured_output(prompt),
-                        **_runtime_metadata(
-                            provider="deterministic_fallback",
-                            model_name="decision_summary_fallback",
-                        ),
-                    }
-                raise
 
     if last_error is not None:
         raise last_error
 
     raise RuntimeError("No OpenAI model candidates configured for agent execution")
+
 
 def _run_vertex_structured_agent(
     *,
@@ -246,51 +250,70 @@ def _run_vertex_structured_agent(
         location=GOOGLE_CLOUD_LOCATION,
     )
 
-    response = client.models.generate_content(
-        model=prompt.model_name,
-        contents=_build_agent_payload(
-            prompt=prompt,
-            scoped_input=scoped_input,
-        ),
-        config=types.GenerateContentConfig(
-            system_instruction=prompt.system_prompt,
-            temperature=0.15,
-            max_output_tokens=1400,
-            response_mime_type="application/json",
-            response_schema=output_type,
-        ),
+    payload = _build_agent_payload(
+        prompt=prompt,
+        scoped_input=scoped_input,
     )
 
-    parsed_output = getattr(response, "parsed", None)
+    for _ in range(MAX_AGENT_ATTEMPTS):
+        try:
+            response = client.models.generate_content(
+                model=prompt.model_name,
+                contents=payload,
+                config=types.GenerateContentConfig(
+                    system_instruction=prompt.system_prompt,
+                    temperature=0.1,
+                    max_output_tokens=2400,
+                    response_mime_type="application/json",
+                    response_schema=output_type,
+                ),
+            )
 
-    if parsed_output is not None:
-        if isinstance(parsed_output, BaseModel):
+            parsed_output = getattr(response, "parsed", None)
+
+            if parsed_output is not None:
+                if isinstance(parsed_output, BaseModel):
+                    return {
+                        **parsed_output.model_dump(exclude_none=True),
+                        **_runtime_metadata(
+                            provider=prompt.model_provider,
+                            model_name=prompt.model_name,
+                        ),
+                    }
+
+                return {
+                    **output_type.model_validate(parsed_output).model_dump(
+                        exclude_none=True
+                    ),
+                    **_runtime_metadata(
+                        provider=prompt.model_provider,
+                        model_name=prompt.model_name,
+                    ),
+                }
+
+            response_text = getattr(response, "text", None)
+
+            if not response_text:
+                raise RuntimeError("No structured output from Vertex")
+
             return {
-                **parsed_output.model_dump(exclude_none=True),
+                **output_type.model_validate_json(response_text).model_dump(
+                    exclude_none=True
+                ),
                 **_runtime_metadata(
                     provider=prompt.model_provider,
                     model_name=prompt.model_name,
                 ),
             }
-
-        return {
-            **output_type.model_validate(parsed_output).model_dump(exclude_none=True),
-            **_runtime_metadata(
-                provider=prompt.model_provider,
-                model_name=prompt.model_name,
-            ),
-        }
-
-    response_text = getattr(response, "text", None)
-
-    if not response_text:
-        raise RuntimeError("No structured output from Vertex")
+        except Exception as exc:
+            if not _is_structured_output_error(exc):
+                raise
 
     return {
-        **output_type.model_validate_json(response_text).model_dump(exclude_none=True),
+        **_fallback_structured_output(prompt),
         **_runtime_metadata(
-            provider=prompt.model_provider,
-            model_name=prompt.model_name,
+            provider="deterministic_fallback",
+            model_name=f"{prompt.agent_name}_fallback",
         ),
     }
 
@@ -315,6 +338,4 @@ def run_structured_agent(
             output_type=output_type,
         )
 
-    raise ValueError(
-        f"Unsupported model provider '{prompt.model_provider}'"
-    )
+    raise ValueError(f"Unsupported model provider '{prompt.model_provider}'")
