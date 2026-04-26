@@ -178,7 +178,7 @@ export default function ApplicationProcessingScreen({
                       : "Processing"}
                 </StatusBadge>
                 <StatusBadge tone="slate">{status.progress}% complete</StatusBadge>
-                {isRefreshing ? <StatusBadge tone="neutral">Refreshing</StatusBadge> : null}
+                {isRefreshing ? <StatusBadge tone="neutral">Processing</StatusBadge> : null}
               </div>
             </div>
 
