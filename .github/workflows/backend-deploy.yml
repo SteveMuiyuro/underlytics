@@ -129,8 +129,12 @@ jobs:
       TF_VAR_langfuse_secret_key: ${{ secrets.TF_VAR_LANGFUSE_SECRET_KEY }}
       TF_VAR_langfuse_host: ${{ secrets.TF_VAR_LANGFUSE_HOST }}
       TF_VAR_openai_api_key: ${{ secrets.TF_VAR_OPENAI_API_KEY }}
-      TF_VAR_resend_api_key: ${{ secrets.TF_VAR_RESEND_API_KEY }}
-      TF_VAR_email_from: ${{ secrets.TF_VAR_EMAIL_FROM }}
+
+      # Email provider secrets.
+      # These use normal GitHub secret names: RESEND_API_KEY and EMAIL_FROM.
+      TF_VAR_resend_api_key: ${{ secrets.RESEND_API_KEY }}
+      TF_VAR_email_from: ${{ secrets.EMAIL_FROM }}
+
       TF_VAR_vertex_location: ${{ vars.VERTEX_LOCATION || vars.GCP_REGION }}
       TF_VAR_vertex_model: ${{ vars.VERTEX_MODEL || 'gemini-2.5-pro' }}
 
@@ -191,6 +195,16 @@ jobs:
           test -n "${API_GATEWAY_URL}"
           test -n "${BACKEND_CLOUD_RUN_URL}"
 
+          for i in 1 2 3 4 5; do
+            if curl -fsS "${API_GATEWAY_URL}/" > /tmp/api-gateway-root.json && \
+               curl -fsS "${BACKEND_CLOUD_RUN_URL}/" > /tmp/backend-root.json; then
+              exit 0
+            fi
+
+            echo "Backend not ready yet, retrying in 10 seconds..."
+            sleep 10
+          done
+
           curl -fsS "${API_GATEWAY_URL}/" > /tmp/api-gateway-root.json
           curl -fsS "${BACKEND_CLOUD_RUN_URL}/" > /tmp/backend-root.json
 
@@ -202,16 +216,29 @@ jobs:
           test "${CLERK_ISSUER}" = "https://primary-grouse-65.clerk.accounts.dev"
           echo "${CLERK_PUBLISHABLE_KEY}" | grep -Eq '^pk_(test|live)_'
 
-          CLOUD_RUN_CLERK_ENV="$(gcloud run services describe underlytics-backend --project="${GCP_PROJECT_ID}" --region="${GCP_REGION}" --format='yaml(spec.template.spec.containers[0].env)')"
+          CLOUD_RUN_ENV="$(gcloud run services describe underlytics-backend --project="${GCP_PROJECT_ID}" --region="${GCP_REGION}" --format='yaml(spec.template.spec.containers[0].env)')"
 
-          echo "${CLOUD_RUN_CLERK_ENV}" | grep -q "CLERK_JWT_ISSUER"
-          echo "${CLOUD_RUN_CLERK_ENV}" | grep -q "CLERK_PUBLISHABLE_KEY"
-          echo "${CLOUD_RUN_CLERK_ENV}" | grep -q "CLERK_AUTHORIZED_PARTIES"
+          echo "${CLOUD_RUN_ENV}" | grep -q "CLERK_JWT_ISSUER"
+          echo "${CLOUD_RUN_ENV}" | grep -q "CLERK_PUBLISHABLE_KEY"
+          echo "${CLOUD_RUN_ENV}" | grep -q "CLERK_AUTHORIZED_PARTIES"
 
-          if echo "${CLOUD_RUN_CLERK_ENV}" | grep -q "CLERK_JWT_KEY"; then
+          if echo "${CLOUD_RUN_ENV}" | grep -q "CLERK_JWT_KEY"; then
             echo "CLERK_JWT_KEY should not be configured when using JWKS issuer verification."
             exit 1
           fi
+
+      - name: Verify email runtime config
+        run: |
+          RESEND_API_KEY="$(gcloud secrets versions access latest --secret=resend-api-key --project="${GCP_PROJECT_ID}")"
+          EMAIL_FROM="$(gcloud secrets versions access latest --secret=email-from --project="${GCP_PROJECT_ID}")"
+
+          test -n "${RESEND_API_KEY}"
+          test -n "${EMAIL_FROM}"
+
+          CLOUD_RUN_ENV="$(gcloud run services describe underlytics-backend --project="${GCP_PROJECT_ID}" --region="${GCP_REGION}" --format='yaml(spec.template.spec.containers[0].env)')"
+
+          echo "${CLOUD_RUN_ENV}" | grep -q "RESEND_API_KEY"
+          echo "${CLOUD_RUN_ENV}" | grep -q "EMAIL_FROM"
 
       - name: Publish deployment summary
         run: |
