@@ -131,7 +131,8 @@ def build_autonomous_agent_input(
                 "id": applicant.id if applicant else None,
                 "email": applicant.email if applicant else None,
                 "full_name": applicant.full_name if applicant else None,
-                "phone_number": applicant.phone_number if applicant else None,
+                "phone_number": application.phone_number
+                or (applicant.phone_number if applicant else None),
             },
             "document_metadata": [
                 {
