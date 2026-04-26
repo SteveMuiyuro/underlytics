@@ -624,9 +624,9 @@ export default async function ApplicationDetailPage({
                   <Mail className="size-5" />
                 </div>
                 <div>
-                  <p className="font-medium text-slate-950">Email status</p>
+                  <p className="font-medium text-slate-950">Email notification</p>
                   <p className="mt-1 text-sm text-slate-500">
-                    Notification workflows are not connected yet.
+                    Applicant outcome emails are active and delivered through Resend.
                   </p>
                 </div>
               </div>
