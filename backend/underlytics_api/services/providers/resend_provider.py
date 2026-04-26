@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 
@@ -36,6 +37,7 @@ class ResendProvider:
                 "html": html_body,
             }
         ).encode("utf-8")
+
         request = Request(
             "https://api.resend.com/emails",
             data=payload,
@@ -46,10 +48,18 @@ class ResendProvider:
             method="POST",
         )
 
-        with urlopen(request, timeout=self.timeout_seconds) as response:
-            response_payload = json.loads(response.read().decode("utf-8"))
+        try:
+            with urlopen(request, timeout=self.timeout_seconds) as response:
+                response_payload = json.loads(response.read().decode("utf-8"))
 
-        return EmailDeliveryResult(
-            provider_name=self.provider_name,
-            provider_message_id=response_payload.get("id"),
-        )
+            return EmailDeliveryResult(
+                provider_name=self.provider_name,
+                provider_message_id=response_payload.get("id"),
+            )
+
+        except HTTPError as exc:
+            error_body = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"Resend API error {exc.code}: {error_body}") from exc
+
+        except URLError as exc:
+            raise RuntimeError(f"Resend network error: {exc.reason}") from exc
