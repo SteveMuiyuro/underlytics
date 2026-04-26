@@ -131,14 +131,14 @@ locals {
     "EMAIL_FROM"             = "email-from"
   }
 
-worker_secret_envs = {
-  "LANGFUSE_PUBLIC_KEY" = "langfuse-public-key"
-  "LANGFUSE_SECRET_KEY" = "langfuse-secret-key"
-  "LANGFUSE_HOST"       = "langfuse-host"
-  "OPENAI_API_KEY"      = "openai-api-key"
-  "RESEND_API_KEY"      = "resend-api-key"
-  "EMAIL_FROM"          = "email-from"
-}
+  worker_secret_envs = {
+    "LANGFUSE_PUBLIC_KEY" = "langfuse-public-key"
+    "LANGFUSE_SECRET_KEY" = "langfuse-secret-key"
+    "LANGFUSE_HOST"       = "langfuse-host"
+    "OPENAI_API_KEY"      = "openai-api-key"
+    "RESEND_API_KEY"      = "resend-api-key"
+    "EMAIL_FROM"          = "email-from"
+  }
 
   gateway_backend_url = trimsuffix(google_cloud_run_v2_service.backend.uri, "/")
 }
