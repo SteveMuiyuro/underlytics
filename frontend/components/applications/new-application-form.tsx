@@ -35,7 +35,6 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
-import { getBackendActorHeaders } from "@/lib/api/server-actor";
 import { syncUser } from "@/lib/api/users";
 
 interface NewApplicationFormProps {
@@ -191,15 +190,12 @@ export default function NewApplicationForm({
         ? formData.account_type
         : "";
 
-      await syncUser(
-        {
-          clerk_user_id: formData.applicant_user_id,
-          email: applicantProfile.email,
-          full_name: applicantProfile.fullName,
-          phone_number: `${formData.phone_country_code}${formData.phone_number}`,
-        },
-        await getBackendActorHeaders()
-      );  
+      await syncUser({
+        clerk_user_id: formData.applicant_user_id,
+        email: applicantProfile.email,
+        full_name: applicantProfile.fullName,
+        phone_number: `${formData.phone_country_code}${formData.phone_number}`,
+      });
       const application = await createApplication({
         applicant_user_id: formData.applicant_user_id,
         loan_product_id: formData.loan_product_id,
