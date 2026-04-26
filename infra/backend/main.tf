@@ -127,6 +127,8 @@ locals {
     "LANGFUSE_SECRET_KEY"    = "langfuse-secret-key"
     "LANGFUSE_HOST"          = "langfuse-host"
     "OPENAI_API_KEY"         = "openai-api-key"
+    "RESEND_API_KEY"         = "resend-api-key"
+    "EMAIL_FROM"             = "email-from"
   }
 
   worker_secret_envs = {
