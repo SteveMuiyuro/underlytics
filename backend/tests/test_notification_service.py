@@ -523,4 +523,4 @@ def test_send_application_email_marks_failed_provider_attempt(monkeypatch):
         db.close()
 
     assert log.status == "failed"
-    assert log.error_message == "Email delivery failed: RuntimeError"
+    assert log.error_message == "Email delivery failed: provider down"

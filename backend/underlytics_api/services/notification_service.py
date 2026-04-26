@@ -102,20 +102,15 @@ def _manual_review_summary(
     reviewer_note: str | None,
 ) -> str:
     if final_decision == "approved":
-        fallback = (
+        return (
             "A reviewer completed an additional review of your application and confirmed "
             "that it can move forward."
         )
-    else:
-        fallback = (
-            "A reviewer completed an additional review of your application and confirmed "
-            "that we cannot approve it at this time."
-        )
 
-    if not reviewer_note:
-        return fallback
-
-    return fallback
+    return (
+        "A reviewer completed an additional review of your application and confirmed "
+        "that we cannot approve it at this time."
+    )
 
 
 def _build_email_provider() -> EmailProvider | None:
@@ -169,6 +164,7 @@ def _existing_sent_log(
         CommunicationLog.template_key == email_type,
         CommunicationLog.status == "sent",
     )
+
     if manual_review_case_id:
         query = query.filter(CommunicationLog.manual_review_case_id == manual_review_case_id)
     else:
@@ -192,7 +188,9 @@ def generate_application_email(
         (output for output in agent_outputs if output.agent_name == "decision_summary"),
         None,
     )
+
     flags = _coerce_flags(decision_output.flags if decision_output else None)
+
     email_context = {
         "application": {
             "application_number": application.application_number,
@@ -216,6 +214,7 @@ def generate_application_email(
             reviewer_note=reviewer_note,
         ),
     }
+
     email_metadata = {
         "application_id": application.id,
         "application_number": application.application_number,
@@ -226,10 +225,12 @@ def generate_application_email(
         "model_name": EMAIL_AGENT_PROMPT.model_name,
         "prompt_version": EMAIL_AGENT_PROMPT.prompt_version,
     }
+
     trace_context = ensure_trace_context(
         seed=f"email:{application.id}:{email_type}",
         group_id=application.id,
     )
+
     with start_agent_observability(
         trace_name=EMAIL_AGENT_TRACE_NAME,
         trace_context=trace_context,
@@ -255,6 +256,7 @@ def generate_application_email(
             output=structured_email.model_dump(),
             metadata=email_metadata,
         )
+
     return structured_email.model_dump()
 
 
@@ -286,6 +288,7 @@ def send_application_email(
     db.add(log)
 
     provider = _build_email_provider()
+
     if not to_email:
         log.status = "skipped"
         log.error_message = "Recipient email is missing"
@@ -313,7 +316,7 @@ def send_application_email(
     except Exception as exc:
         log.status = "failed"
         log.provider_name = provider.provider_name
-        log.error_message = f"Email delivery failed: {type(exc).__name__}"
+        log.error_message = f"Email delivery failed: {exc}"
 
     db.add(log)
     db.commit()
@@ -331,6 +334,7 @@ def send_automated_decision_notification(
         "approved": "agent_final_approved",
         "rejected": "agent_final_rejected",
     }.get(decision)
+
     if not email_type:
         return None
 
@@ -338,11 +342,13 @@ def send_automated_decision_notification(
         return None
 
     context = _load_application_email_context(db, application_id=application_id)
+
     email_payload = generate_application_email(
         application=context.application,
         agent_outputs=context.agent_outputs,
         email_type=email_type,
     )
+
     return send_application_email(
         db=db,
         application_id=context.application.id,
@@ -363,10 +369,12 @@ def send_manual_review_escalation_notification(
     manual_review_case_id: str,
 ) -> CommunicationLog | None:
     case = db.query(ManualReviewCase).filter(ManualReviewCase.id == manual_review_case_id).first()
+
     if not case:
         raise ValueError("Manual review case not found for notification")
 
     email_type = "manual_review_escalated"
+
     if _existing_sent_log(
         db,
         application_id=case.application_id,
@@ -376,11 +384,13 @@ def send_manual_review_escalation_notification(
         return None
 
     context = _load_application_email_context(db, application_id=case.application_id)
+
     email_payload = generate_application_email(
         application=context.application,
         agent_outputs=context.agent_outputs,
         email_type=email_type,
     )
+
     return send_application_email(
         db=db,
         application_id=context.application.id,
@@ -402,6 +412,7 @@ def send_manual_review_completed_notification(
     manual_review_case_id: str,
 ) -> CommunicationLog | None:
     case = db.query(ManualReviewCase).filter(ManualReviewCase.id == manual_review_case_id).first()
+
     if not case:
         raise ValueError("Manual review case not found for notification")
 
@@ -414,6 +425,7 @@ def send_manual_review_completed_notification(
         .order_by(ManualReviewAction.created_at.desc())
         .first()
     )
+
     if not resolution_action or resolution_action.new_decision not in {"approved", "rejected"}:
         return None
 
@@ -422,6 +434,7 @@ def send_manual_review_completed_notification(
         if resolution_action.new_decision == "approved"
         else "manual_review_final_rejected"
     )
+
     if _existing_sent_log(
         db,
         application_id=case.application_id,
@@ -431,6 +444,7 @@ def send_manual_review_completed_notification(
         return None
 
     context = _load_application_email_context(db, application_id=case.application_id)
+
     email_payload = generate_application_email(
         application=context.application,
         agent_outputs=context.agent_outputs,
@@ -438,6 +452,7 @@ def send_manual_review_completed_notification(
         reviewer_note=resolution_action.note,
         reviewer_decision=resolution_action.new_decision,
     )
+
     return send_application_email(
         db=db,
         application_id=context.application.id,
