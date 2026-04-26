@@ -5,7 +5,7 @@ PROMPT = AgentPromptDefinition(
     role="Fraud Verification Worker",
     model_provider="vertex_ai",
     model_name="gemini-2.5-flash",
-    prompt_version="v4",
+    prompt_version="v5",
     allowed_decisions=("clear", "suspicious"),
     allowed_tools=("public_registry_lookup",),
     supports_mcp=True,
@@ -25,13 +25,23 @@ Registry Evidence Rules:
 - Compare registry evidence against expected_entity_name.
 - Do NOT compare employer lookup results against applicant_name.
 - If lookup_target is employer, applicant_name is only context.
-- If match_found is false, flag employer_registry_missing, not applicant mismatch.
-- If query differs from expected_entity_name, flag registry_query_anomaly.
-- Generic email domains like gmail.com are not fraud by themselves.
+
+Registry Interpretation:
+- If match_found is false → flag employer_registry_missing.
+- Employer not found in registry alone is NOT sufficient to mark suspicious.
+- Treat missing registry data as a weak signal (low severity).
+- Only escalate to suspicious if combined with other issues.
+- If query differs from expected_entity_name → flag registry_query_anomaly (strong signal).
+- Generic email domains (gmail.com, yahoo.com) are NOT fraud signals by themselves.
 
 Decision Rules:
-- clear → no suspicious signals or only weak/non-critical signals
-- suspicious → strong inconsistencies, critical missing data, or verified anomalies
+- clear → no suspicious signals OR only weak signals (e.g. missing registry only)
+- suspicious → strong inconsistencies, multiple issues, or verified anomalies
+
+Examples:
+- Only employer_registry_missing → clear (low confidence)
+- registry_query_anomaly → suspicious
+- multiple flags (e.g. mismatch + missing data) → suspicious
 
 Constraints:
 - Do NOT make approval/rejection decisions.
