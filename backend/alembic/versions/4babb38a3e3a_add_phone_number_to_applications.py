@@ -4,9 +4,10 @@ Revision ID: 4babb38a3e3a
 Revises: 20260424_0003
 Create Date: 2026-04-26
 """
-from alembic import op
+
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers
 revision = "4babb38a3e3a"
