@@ -167,13 +167,14 @@ def _run_openai_structured_agent(
                     max_tokens=1400,
                 ),
                 output_type=AgentOutputSchema(
-                output_type,
-                strict_json_schema=False,
+                    output_type,
+                    strict_json_schema=False,
                 ),
             )
 
             result = Runner.run_sync(agent, payload)
             output = result.final_output_as(output_type, raise_if_incorrect_type=True)
+
             return {
                 **output.model_dump(exclude_none=True),
                 **_runtime_metadata(
@@ -181,9 +182,28 @@ def _run_openai_structured_agent(
                     model_name=model_name,
                 ),
             }
+
         except Exception as exc:
             last_error = exc
+
+            # 🔥 RETRY ON JSON / PARSE ERRORS
+            if "json" in str(exc).lower() or "parse" in str(exc).lower():
+                try:
+                    result = Runner.run_sync(agent, payload)
+                    output = result.final_output_as(output_type, raise_if_incorrect_type=True)
+
+                    return {
+                        **output.model_dump(exclude_none=True),
+                        **_runtime_metadata(
+                            provider=prompt.model_provider,
+                            model_name=model_name,
+                        ),
+                    }
+                except Exception:
+                    pass  # fall through
+
             is_last_candidate = index == len(model_candidates) - 1
+
             if is_last_candidate or not _is_openai_model_unavailable_error(exc):
                 if prompt.agent_name == "decision_summary":
                     return {
@@ -199,7 +219,6 @@ def _run_openai_structured_agent(
         raise last_error
 
     raise RuntimeError("No OpenAI model candidates configured for agent execution")
-
 
 def _run_vertex_structured_agent(
     *,
