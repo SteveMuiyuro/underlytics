@@ -11,6 +11,21 @@ ALLOWED_AGENT_DECISIONS = {
 ALLOWED_FINAL_DECISIONS = {"approved", "rejected", "manual_review"}
 
 
+def _normalize_unit_float(value: Any, *, field_name: str, agent_name: str) -> float:
+    try:
+        normalized = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{agent_name} output has invalid {field_name}") from exc
+
+    if normalized < 0:
+        return 0.0
+
+    if normalized > 1:
+        return 1.0
+
+    return normalized
+
+
 def validate_agent_output(agent_name: str, output: dict[str, Any]) -> None:
     required_fields = {"score", "confidence", "decision", "flags", "reasoning"}
 
@@ -20,17 +35,23 @@ def validate_agent_output(agent_name: str, output: dict[str, Any]) -> None:
             f"{agent_name} output missing required fields: {', '.join(sorted(missing))}"
         )
 
-    score = output.get("score")
-    confidence = output.get("confidence")
+    score = _normalize_unit_float(
+        output.get("score"),
+        field_name="score",
+        agent_name=agent_name,
+    )
+    confidence = _normalize_unit_float(
+        output.get("confidence"),
+        field_name="confidence",
+        agent_name=agent_name,
+    )
+
+    output["score"] = score
+    output["confidence"] = confidence
+
     decision = output.get("decision")
     flags = output.get("flags")
     reasoning = output.get("reasoning")
-
-    if not isinstance(score, (int, float)) or not 0 <= score <= 1:
-        raise ValueError(f"{agent_name} output has invalid score")
-
-    if not isinstance(confidence, (int, float)) or not 0 <= confidence <= 1:
-        raise ValueError(f"{agent_name} output has invalid confidence")
 
     if not isinstance(decision, str):
         raise ValueError(f"{agent_name} output has invalid decision")
