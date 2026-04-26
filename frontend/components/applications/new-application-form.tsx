@@ -35,7 +35,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
-import { syncUser } from "@/lib/api/users";
+
 
 interface NewApplicationFormProps {
   loanProducts: ApiLoanProduct[];
@@ -190,15 +190,11 @@ export default function NewApplicationForm({
         ? formData.account_type
         : "";
 
-      await syncUser({
-        clerk_user_id: formData.applicant_user_id,
-        email: applicantProfile.email,
-        full_name: applicantProfile.fullName,
-        phone_number: `${formData.phone_country_code}${formData.phone_number}`,
-      });
+ 
       const application = await createApplication({
         applicant_user_id: formData.applicant_user_id,
         loan_product_id: formData.loan_product_id,
+        phone_number: `${formData.phone_country_code}${formData.phone_number}`,
         requested_amount: Number(formData.requested_amount),
         requested_term_months: Number(formData.requested_term_months),
         loan_purpose: formData.loan_purpose,

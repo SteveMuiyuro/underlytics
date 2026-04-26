@@ -197,11 +197,13 @@ def create_application(
 
     count = db.query(Application).count() + 1
     application_number = f"APP-{count:03d}"
+
     normalized_employment_status = _normalize_optional_text(payload.employment_status)
     normalized_existing_obligations = max(payload.existing_loan_obligations, 0)
     normalized_employer_name = _normalize_optional_text(payload.employer_name)
     normalized_bank_name = _normalize_optional_text(payload.bank_name)
     normalized_account_type = _normalize_optional_text(payload.account_type)
+    normalized_phone_number = _normalize_optional_text(payload.phone_number)
 
     if normalized_employment_status in EMPLOYER_NAME_HIDDEN_STATUSES:
         normalized_employer_name = None
@@ -225,6 +227,7 @@ def create_application(
         employer_name=normalized_employer_name,
         bank_name=normalized_bank_name,
         account_type=normalized_account_type,
+        phone_number=normalized_phone_number,
         submitted_at=datetime.utcnow(),
     )
 

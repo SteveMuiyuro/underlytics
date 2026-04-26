@@ -54,7 +54,10 @@ export const getBackendActor = cache(async (): Promise<BackendActor> => {
     clerk_user_id: userId,
     email: primaryEmail,
     full_name: fullName,
-    phone_number: clerkUser.phoneNumbers[0]?.phoneNumber ?? null,
+    phone_number:
+      clerkUser.phoneNumbers[0]?.phoneNumber ??
+      (clerkUser.unsafeMetadata?.phone_number as string | undefined) ??
+      null,
   }, authHeaders);
 
   return {

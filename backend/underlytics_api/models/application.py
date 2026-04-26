@@ -33,6 +33,7 @@ class Application(Base):
     employer_name: Mapped[str | None] = mapped_column(String, nullable=True)
     bank_name: Mapped[str | None] = mapped_column(String, nullable=True)
     account_type: Mapped[str | None] = mapped_column(String, nullable=True)
+    phone_number: Mapped[str | None] = mapped_column(String, nullable=True)
 
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

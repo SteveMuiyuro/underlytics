@@ -17,6 +17,7 @@ class ApplicationCreate(BaseModel):
     bank_name: str | None = None
     account_type: str | None = None
     auto_start_workflow: bool = True
+    phone_number: str | None = None
 
 
 class ApplicationResponse(BaseModel):
@@ -35,6 +36,7 @@ class ApplicationResponse(BaseModel):
     employer_name: str | None
     bank_name: str | None
     account_type: str | None
+    phone_number: str | None
     submitted_at: datetime | None
     created_at: datetime
     updated_at: datetime
