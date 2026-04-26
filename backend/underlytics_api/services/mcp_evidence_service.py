@@ -147,6 +147,8 @@ def _build_public_registry_evidence(
     applicant: User | None,
 ) -> dict[str, Any]:
     employer_name = application.employer_name
+    applicant_name = applicant.full_name if applicant else None
+
     if not employer_name:
         return {
             "tool_name": "public_registry_lookup",
@@ -155,14 +157,34 @@ def _build_public_registry_evidence(
             "cost_tier": "free",
             "requires_api_key": False,
             "reason": "employer_name_missing",
-            "evidence": {},
+            "evidence": {
+                "lookup_target": "employer",
+                "query": None,
+                "expected_entity_name": employer_name,
+                "applicant_name": applicant_name,
+                "comparison_rule": "No employer lookup was performed.",
+            },
         }
 
     registry = _load_public_registry_fixture()
-    match = registry.get(_normalize_name(employer_name))
+    normalized_employer_name = _normalize_name(employer_name)
+    match = registry.get(normalized_employer_name)
+
     email_domain = None
     if applicant and applicant.email and "@" in applicant.email:
         email_domain = applicant.email.split("@", 1)[1].lower()
+
+    base_evidence = {
+        "lookup_target": "employer",
+        "query": employer_name,
+        "expected_entity_name": employer_name,
+        "applicant_name": applicant_name,
+        "email_domain": email_domain,
+        "comparison_rule": (
+            "Compare registry results against expected_entity_name only. "
+            "Do not compare employer lookup results against applicant_name."
+        ),
+    }
 
     if not match:
         return {
@@ -172,12 +194,14 @@ def _build_public_registry_evidence(
             "cost_tier": "free",
             "requires_api_key": False,
             "evidence": {
-                "query": employer_name,
+                **base_evidence,
                 "match_found": False,
                 "registry_status": "not_found",
-                "email_domain": email_domain,
             },
         }
+
+    registered_name = match["registered_name"]
+    normalized_registered_name = _normalize_name(registered_name)
 
     return {
         "tool_name": "public_registry_lookup",
@@ -186,14 +210,16 @@ def _build_public_registry_evidence(
         "cost_tier": "free",
         "requires_api_key": False,
         "evidence": {
-            "query": employer_name,
+            **base_evidence,
             "match_found": True,
-            "registered_name": match["registered_name"],
+            "registered_name": registered_name,
+            "registered_name_matches_query": (
+                normalized_registered_name == normalized_employer_name
+            ),
             "registry_status": match["status"],
             "entity_type": match["entity_type"],
             "jurisdiction": match["jurisdiction"],
             "website_domain": match.get("website_domain"),
-            "email_domain": email_domain,
         },
     }
 
