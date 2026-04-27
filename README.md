@@ -36,7 +36,7 @@ The backend is a FastAPI application in `backend/underlytics_api/` backed by SQL
 
 ### Agent Workflow
 
-Underlytics uses a Planner + Worker architecture defined in [AGENTS.md](./AGENTS.md). The planner orchestrates workflow execution. Specialist workers evaluate scoped evidence independently. A decision summary agent proposes an outcome. Deterministic guardrails then enforce the final underwriting decision. Worker outputs are structured, explainable, and stored for audit and review.
+Underlytics uses a Planner + Worker architecture. The planner orchestrates workflow execution. Specialist workers evaluate scoped evidence independently. A decision summary agent proposes an outcome. Deterministic guardrails then enforce the final underwriting decision. Worker outputs are structured, explainable, and stored for audit and review.
 
 ### Cloud Deployment Flow
 
