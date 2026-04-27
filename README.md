@@ -143,8 +143,7 @@ flowchart TD
 ## Repository Structure
 
 ```text
-.
-├── AGENTS.md
+
 ├── backend/
 │   ├── alembic/
 │   ├── scripts/
@@ -176,7 +175,6 @@ flowchart TD
 
 Important directories and files:
 
-- `AGENTS.md`: source of truth for the planner-plus-worker architecture and safety rules
 - `backend/underlytics_api/api/`: FastAPI route definitions
 - `backend/underlytics_api/services/`: orchestration, agent runtime, guardrails, notification, and workflow services
 - `backend/underlytics_api/models/`: persistence models for applications, workflow state, agent outputs, evaluations, and manual review
