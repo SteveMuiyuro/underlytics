@@ -139,6 +139,7 @@ flowchart TD
 - ESLint
 - TypeScript typecheck
 - Langfuse tracing
+- OpenAI tracing hooks
 
 ## Repository Structure
 
