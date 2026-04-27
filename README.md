@@ -42,7 +42,6 @@ Underlytics uses a Planner + Worker architecture defined in [AGENTS.md](./AGENTS
 
 The backend deployment targets Google Cloud and provisions Cloud Run, Pub/Sub, Cloud SQL, API Gateway, Secret Manager, Artifact Registry, and GitHub Workload Identity Federation. The frontend is deployed on Vercel, while Terraform in `infra/frontend` tracks frontend deployment metadata and integration references. GitHub Actions validates code, runs tests, applies Terraform, builds backend images, and deploys to production surfaces.
 
-Current live frontend URL: https://underlytics.vercel.app/
 
 ## Architecture Diagrams
 
