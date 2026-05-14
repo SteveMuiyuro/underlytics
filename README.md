@@ -63,17 +63,22 @@ flowchart LR
 ```mermaid
 flowchart TD
     intake[Application + Documents] --> api[FastAPI Backend API]
-    api --> planner[Planner Agent]
-    planner --> workers[Worker Agents]
+    api --> dispatch[Workflow Dispatch]
+    dispatch --> planner[Planner Agent]
+    planner --> plan[Workflow Plan + Step State]
+    plan --> workers[Specialist Worker Agents]
     workers --> structured[Structured Worker Outputs]
     structured --> summary[Decision Summary Agent]
     summary --> guardrails[Deterministic Guardrails]
-    guardrails --> decision[Final Underwriting Decision]
-    decision --> notify[Email / Notification Service]
-    planner --> db[(Database / Persistence)]
+    guardrails --> decision{Final Outcome}
+    decision -->|approved / rejected| notify[Email / Notification Service]
+    decision -->|manual_review| review[Manual Review Queue]
+    api --> db[(Database / Persistence)]
+    plan --> db
     workers --> db
     summary --> db
     guardrails --> db
+    review --> db
     notify --> db
 ```
 
