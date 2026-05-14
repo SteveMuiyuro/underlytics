@@ -89,6 +89,9 @@ jobs:
       - name: Lint backend
         run: uv run ruff check .
 
+      - name: Check backend formatting
+        run: uv run ruff format --check .
+
       - name: Validate backend imports
         run: uv run python -c "from underlytics_api.main import app; from underlytics_api.worker_app import app as worker_app; print(app.title); print(worker_app.title)"
 
@@ -154,6 +157,15 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
 
+      - name: Initialize Terraform
+        run: terraform init -input=false
+
+      - name: Bootstrap deployment prerequisites
+        run: |
+          terraform apply -auto-approve -input=false \
+            -target=google_project_service.enabled \
+            -target=google_artifact_registry_repository.backend
+
       - name: Configure Artifact Registry auth
         run: gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
 
@@ -162,9 +174,6 @@ jobs:
 
       - name: Push backend image
         run: docker push "${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/underlytics-images/underlytics-api:${IMAGE_TAG}"
-
-      - name: Initialize Terraform
-        run: terraform init -input=false
 
       - name: Validate Terraform
         run: terraform validate
@@ -228,6 +237,7 @@ jobs:
           fi
 
       - name: Verify email runtime config
+        if: env.TF_VAR_resend_api_key != '' && env.TF_VAR_email_from != ''
         run: |
           RESEND_API_KEY="$(gcloud secrets versions access latest --secret=resend-api-key --project="${GCP_PROJECT_ID}")"
           EMAIL_FROM="$(gcloud secrets versions access latest --secret=email-from --project="${GCP_PROJECT_ID}")"
@@ -239,6 +249,15 @@ jobs:
 
           echo "${CLOUD_RUN_ENV}" | grep -q "RESEND_API_KEY"
           echo "${CLOUD_RUN_ENV}" | grep -q "EMAIL_FROM"
+
+      - name: Note skipped email verification
+        if: env.TF_VAR_resend_api_key == '' || env.TF_VAR_email_from == ''
+        run: |
+          {
+            echo "## Backend Deployment Note"
+            echo ""
+            echo "- Email runtime verification skipped because \`RESEND_API_KEY\` or \`EMAIL_FROM\` is not configured."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish deployment summary
         run: |

@@ -12,9 +12,7 @@ from underlytics_api.models.application import Application
 from underlytics_api.models.loan_product import LoanProduct
 from underlytics_api.models.user import User
 
-FIXTURE_PATH = (
-    Path(__file__).resolve().parents[1] / "mcp_fixtures" / "public_registry_fixture.json"
-)
+FIXTURE_PATH = Path(__file__).resolve().parents[1] / "mcp_fixtures" / "public_registry_fixture.json"
 
 POLICY_RULES_BY_PRODUCT_CODE: dict[str, dict[str, Any]] = {
     "personal_loan": {
@@ -110,9 +108,7 @@ def _build_policy_knowledgebase_evidence(
     )
 
     amount_near_upper_limit = application.requested_amount >= int(product.max_amount * 0.9)
-    term_near_upper_limit = (
-        application.requested_term_months >= int(product.max_term_months * 0.9)
-    )
+    term_near_upper_limit = application.requested_term_months >= int(product.max_term_months * 0.9)
 
     return {
         "tool_name": "policy_knowledgebase",
@@ -232,9 +228,7 @@ def build_mcp_tool_evidence(
 ) -> list[dict[str, Any]]:
     if agent_name == "policy_retrieval":
         product = (
-            db.query(LoanProduct)
-            .filter(LoanProduct.id == application.loan_product_id)
-            .first()
+            db.query(LoanProduct).filter(LoanProduct.id == application.loan_product_id).first()
         )
         return [_build_policy_knowledgebase_evidence(application=application, product=product)]
 

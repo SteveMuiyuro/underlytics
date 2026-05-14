@@ -32,6 +32,7 @@ def _csv_env(name: str, default: list[str]) -> list[str]:
 
     return normalized
 
+
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./underlytics.db")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 RESEND_API_KEY = _optional_env("RESEND_API_KEY")
@@ -63,9 +64,7 @@ CORS_ALLOWED_ORIGINS = _csv_env(
     ],
 )
 CLERK_AUTHORIZED_PARTIES = [
-    party.strip()
-    for party in os.getenv("CLERK_AUTHORIZED_PARTIES", "").split(",")
-    if party.strip()
+    party.strip() for party in os.getenv("CLERK_AUTHORIZED_PARTIES", "").split(",") if party.strip()
 ]
 OPENAI_DECISION_SUMMARY_MODEL_CANDIDATES = _csv_env(
     "OPENAI_DECISION_SUMMARY_MODEL_CANDIDATES",

@@ -29,9 +29,7 @@ def list_application_documents(
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
 
-    enforce_application_access(
-        actor=actor, applicant_user_id=application.applicant_user_id
-    )
+    enforce_application_access(actor=actor, applicant_user_id=application.applicant_user_id)
 
     return (
         db.query(ApplicationDocument)

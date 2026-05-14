@@ -14,9 +14,7 @@ class ManualReviewAction(Base):
     manual_review_case_id: Mapped[str] = mapped_column(
         String, ForeignKey("manual_review_cases.id"), nullable=False
     )
-    reviewer_user_id: Mapped[str] = mapped_column(
-        String, ForeignKey("users.id"), nullable=False
-    )
+    reviewer_user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id"), nullable=False)
     action: Mapped[str] = mapped_column(String, nullable=False)
     note: Mapped[str] = mapped_column(Text, nullable=False)
     old_decision: Mapped[str | None] = mapped_column(String, nullable=True)

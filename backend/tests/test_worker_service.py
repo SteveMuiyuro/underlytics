@@ -5,6 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from underlytics_api.models.agent_evaluation import AgentEvaluation
+from underlytics_api.models.agent_output import AgentOutput
 from underlytics_api.models.application import Application
 from underlytics_api.models.application_document import ApplicationDocument
 from underlytics_api.models.base import Base
@@ -213,9 +214,7 @@ def test_run_workflow_plan_records_agent_evaluations(monkeypatch):
                 {
                     "agent_name": agent_name,
                     "role": agent_name,
-                    "model_provider": "vertex_ai"
-                    if agent_name != "decision_summary"
-                    else "openai",
+                    "model_provider": "vertex_ai" if agent_name != "decision_summary" else "openai",
                     "model_name": "gemini-2.5-flash"
                     if agent_name != "decision_summary"
                     else "gpt-5.4",
@@ -291,21 +290,27 @@ def test_run_workflow_plan_records_agent_evaluations(monkeypatch):
         application = seed_application(db)
         plan = materialize_underwriting_plan(db, application.id)
         run_workflow_plan(db, plan)
-        evaluations = (
-            db.query(AgentEvaluation)
-            .order_by(AgentEvaluation.agent_name.asc())
-            .all()
+        evaluations = db.query(AgentEvaluation).order_by(AgentEvaluation.agent_name.asc()).all()
+        decision_output = (
+            db.query(AgentOutput)
+            .filter(AgentOutput.application_id == application.id)
+            .filter(AgentOutput.agent_name == "decision_summary")
+            .first()
         )
     finally:
         db.close()
 
     assert len(evaluations) == 5
+    assert decision_output is not None
     decision_summary_eval = next(
         evaluation for evaluation in evaluations if evaluation.agent_name == "decision_summary"
     )
     assert decision_summary_eval.decision == "approved"
     assert decision_summary_eval.final_decision == "manual_review"
     assert decision_summary_eval.guardrail_adjusted is True
+    assert json.loads(decision_output.output_json)["guardrail_overrides"] == [
+        "risk_requires_review"
+    ]
     policy_eval = next(
         evaluation for evaluation in evaluations if evaluation.agent_name == "policy_retrieval"
     )
@@ -314,9 +319,7 @@ def test_run_workflow_plan_records_agent_evaluations(monkeypatch):
     )
     assert policy_eval.tool_evidence_count == 1
     assert fraud_eval.tool_evidence_count == 1
-    assert json.loads(policy_eval.evaluation_json)["tool_sources"] == [
-        "internal_policy_catalog"
-    ]
+    assert json.loads(policy_eval.evaluation_json)["tool_sources"] == ["internal_policy_catalog"]
     assert observed_guardrail["name"] == "decision_summary_guardrails"
     assert observed_guardrail["metadata"]["proposed_decision"] == "approved"
     assert observed_guardrail["output"]["final_decision"] == "manual_review"

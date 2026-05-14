@@ -70,9 +70,7 @@ class ObservationContext:
             )
 
         if self.openai_span:
-            self.openai_span.set_error(
-                SpanError(message=message, data=data or None)
-            )
+            self.openai_span.set_error(SpanError(message=message, data=data or None))
 
 
 def _langfuse_enabled() -> bool:

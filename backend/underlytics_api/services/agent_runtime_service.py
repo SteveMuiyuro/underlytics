@@ -15,8 +15,7 @@ MAX_AGENT_ATTEMPTS = 3
 
 def _is_test_or_deterministic_mode() -> bool:
     return bool(
-        os.getenv("PYTEST_CURRENT_TEST")
-        or os.getenv("WORKFLOW_EXECUTION_MODE") == "deterministic"
+        os.getenv("PYTEST_CURRENT_TEST") or os.getenv("WORKFLOW_EXECUTION_MODE") == "deterministic"
     )
 
 
@@ -95,10 +94,7 @@ def _fallback_structured_output(prompt: AgentPromptDefinition) -> dict[str, Any]
     if prompt.agent_name == "email_agent":
         return {
             "subject": "Your loan application update",
-            "html_body": (
-                "<p>Your application has been successfully "
-                "reviewed and approved.</p>"
-            ),
+            "html_body": ("<p>Your application has been successfully reviewed and approved.</p>"),
         }
 
     fallback_decisions = {
@@ -237,9 +233,7 @@ def _run_vertex_structured_agent(
         from google import genai
         from google.genai import types
     except ImportError as exc:
-        raise RuntimeError(
-            "google-genai is required for Vertex AI agent execution."
-        ) from exc
+        raise RuntimeError("google-genai is required for Vertex AI agent execution.") from exc
 
     if not GOOGLE_CLOUD_PROJECT:
         raise RuntimeError("GOOGLE_CLOUD_PROJECT is required")
@@ -282,9 +276,7 @@ def _run_vertex_structured_agent(
                     }
 
                 return {
-                    **output_type.model_validate(parsed_output).model_dump(
-                        exclude_none=True
-                    ),
+                    **output_type.model_validate(parsed_output).model_dump(exclude_none=True),
                     **_runtime_metadata(
                         provider=prompt.model_provider,
                         model_name=prompt.model_name,
@@ -297,9 +289,7 @@ def _run_vertex_structured_agent(
                 raise RuntimeError("No structured output from Vertex")
 
             return {
-                **output_type.model_validate_json(response_text).model_dump(
-                    exclude_none=True
-                ),
+                **output_type.model_validate_json(response_text).model_dump(exclude_none=True),
                 **_runtime_metadata(
                     provider=prompt.model_provider,
                     model_name=prompt.model_name,

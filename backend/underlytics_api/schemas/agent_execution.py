@@ -4,14 +4,11 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from underlytics_api.schemas.structured_outputs import BaseUnderwritingAgentOutput
 
-class EvaluationAgentOutput(BaseModel):
-    score: float
-    confidence: float
+
+class EvaluationAgentOutput(BaseUnderwritingAgentOutput):
     decision: str
-    flags: list[str]
-    reasoning: str
-    inputs_used: dict[str, Any] | None = None
 
 
 WorkerName = Literal[

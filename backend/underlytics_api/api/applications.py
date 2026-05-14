@@ -64,21 +64,29 @@ def get_application_stats(
 
     total = base_query.with_entities(func.count(Application.id)).scalar()
 
-    approved = base_query.filter(Application.status == "approved").with_entities(
-        func.count(Application.id)
-    ).scalar()
+    approved = (
+        base_query.filter(Application.status == "approved")
+        .with_entities(func.count(Application.id))
+        .scalar()
+    )
 
-    rejected = base_query.filter(Application.status == "rejected").with_entities(
-        func.count(Application.id)
-    ).scalar()
+    rejected = (
+        base_query.filter(Application.status == "rejected")
+        .with_entities(func.count(Application.id))
+        .scalar()
+    )
 
-    in_progress = base_query.filter(Application.status == "in_progress").with_entities(
-        func.count(Application.id)
-    ).scalar()
+    in_progress = (
+        base_query.filter(Application.status == "in_progress")
+        .with_entities(func.count(Application.id))
+        .scalar()
+    )
 
-    submitted = base_query.filter(Application.status == "submitted").with_entities(
-        func.count(Application.id)
-    ).scalar()
+    submitted = (
+        base_query.filter(Application.status == "submitted")
+        .with_entities(func.count(Application.id))
+        .scalar()
+    )
 
     return {
         "total": total,
@@ -99,17 +107,13 @@ def get_application(
     require_registered_actor(actor)
 
     application = (
-        db.query(Application)
-        .filter(Application.application_number == application_number)
-        .first()
+        db.query(Application).filter(Application.application_number == application_number).first()
     )
 
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
 
-    enforce_application_access(
-        actor=actor, applicant_user_id=application.applicant_user_id
-    )
+    enforce_application_access(actor=actor, applicant_user_id=application.applicant_user_id)
 
     return application
 
@@ -124,17 +128,13 @@ def get_application_workflow_status(
     require_registered_actor(actor)
 
     application = (
-        db.query(Application)
-        .filter(Application.application_number == application_number)
-        .first()
+        db.query(Application).filter(Application.application_number == application_number).first()
     )
 
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
 
-    enforce_application_access(
-        actor=actor, applicant_user_id=application.applicant_user_id
-    )
+    enforce_application_access(actor=actor, applicant_user_id=application.applicant_user_id)
 
     return build_workflow_status(db, application=application)
 
@@ -152,17 +152,13 @@ def get_application_evaluations(
     require_registered_actor(actor)
 
     application = (
-        db.query(Application)
-        .filter(Application.application_number == application_number)
-        .first()
+        db.query(Application).filter(Application.application_number == application_number).first()
     )
 
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
 
-    enforce_application_access(
-        actor=actor, applicant_user_id=application.applicant_user_id
-    )
+    enforce_application_access(actor=actor, applicant_user_id=application.applicant_user_id)
 
     return (
         db.query(AgentEvaluation)

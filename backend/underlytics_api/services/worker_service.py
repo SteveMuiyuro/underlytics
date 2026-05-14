@@ -13,7 +13,7 @@ from underlytics_api.models.workflow_step import WorkflowStep
 from underlytics_api.models.workflow_step_attempt import WorkflowStepAttempt
 from underlytics_api.services.agent_evaluation_service import record_agent_evaluation
 from underlytics_api.services.guardrail_service import (
-    enforce_decision_guardrails,
+    evaluate_decision_guardrails,
     validate_agent_output,
 )
 from underlytics_api.services.notification_service import (
@@ -48,11 +48,7 @@ def _upsert_agent_output(
     agent_name: str,
     output: dict,
 ) -> None:
-    existing = (
-        db.query(AgentOutput)
-        .filter(AgentOutput.agent_run_id == agent_run_id)
-        .first()
-    )
+    existing = db.query(AgentOutput).filter(AgentOutput.agent_run_id == agent_run_id).first()
 
     payload = json.dumps(output)
 
@@ -232,7 +228,10 @@ def _execute_workflow_step(
                 input_payload=step_input,
             ) as observation:
                 try:
-                    validate_agent_output(step.worker_name, output)
+                    validated_output = validate_agent_output(step.worker_name, output)
+                    output = validated_output.model_dump(exclude_none=True)
+                    proposed_decision = output.get("decision")
+                    final_decision = proposed_decision
                     observation.record_output(
                         output=output,
                         metadata={**step_metadata, "status": "completed"},
@@ -247,7 +246,10 @@ def _execute_workflow_step(
                     )
                     raise
         else:
-            validate_agent_output(step.worker_name, output)
+            validated_output = validate_agent_output(step.worker_name, output)
+            output = validated_output.model_dump(exclude_none=True)
+            proposed_decision = output.get("decision")
+            final_decision = proposed_decision
 
         if step.worker_name == "decision_summary":
             guardrail_metadata = {
@@ -267,21 +269,19 @@ def _execute_workflow_step(
                     metadata=guardrail_metadata,
                 ) as observation:
                     try:
-                        final_decision = enforce_decision_guardrails(
+                        guardrail_result = evaluate_decision_guardrails(
                             document_output=output_map.get("document_analysis", {}),
                             policy_output=output_map.get("policy_retrieval", {}),
                             risk_output=output_map.get("risk_assessment", {}),
                             fraud_output=output_map.get("fraud_verification", {}),
                             proposed_decision=proposed_decision,
                         )
+                        final_decision = guardrail_result.final_decision
                         observation.record_output(
-                            output={
-                                "proposed_decision": proposed_decision,
-                                "final_decision": final_decision,
-                            },
+                            output=guardrail_result.model_dump(),
                             metadata={
                                 **guardrail_metadata,
-                                "guardrail_adjusted": final_decision != proposed_decision,
+                                "guardrail_adjusted": not guardrail_result.allowed,
                             },
                         )
                     except Exception as exc:
@@ -291,24 +291,26 @@ def _execute_workflow_step(
                         )
                         raise
             else:
-                final_decision = enforce_decision_guardrails(
+                guardrail_result = evaluate_decision_guardrails(
                     document_output=output_map.get("document_analysis", {}),
                     policy_output=output_map.get("policy_retrieval", {}),
                     risk_output=output_map.get("risk_assessment", {}),
                     fraud_output=output_map.get("fraud_verification", {}),
                     proposed_decision=proposed_decision,
                 )
+                final_decision = guardrail_result.final_decision
+            if guardrail_result.violations:
+                output["guardrail_overrides"] = guardrail_result.violations
             if final_decision != proposed_decision:
                 output["flags"] = output.get("flags", []) + [
                     f"guardrail_adjusted_to_{final_decision}"
                 ]
                 output["reasoning"] = (
-                    f'{output.get("reasoning", "").strip()} Final decision adjusted by hard '
-                    f"guardrails to {final_decision}."
+                    f"{output.get('reasoning', '').strip()} {guardrail_result.explanation}"
                 ).strip()
                 output["decision"] = final_decision
 
-            application.status = output.get("decision")
+            application.status = final_decision
             db.add(application)
 
         record_agent_evaluation(
@@ -468,7 +470,6 @@ def run_workflow_plan(db: Session, plan: WorkflowPlan) -> UnderwritingJob:
 
         manual_review_case: ManualReviewCase | None = None
         if refreshed_steps and all(step.status == "completed" for step in refreshed_steps):
-
             if final_decision == "manual_review":
                 plan.status = "awaiting_review"
                 manual_review_case = _ensure_manual_review_case(

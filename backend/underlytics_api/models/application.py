@@ -13,9 +13,7 @@ class Application(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid4()))
     application_number: Mapped[str] = mapped_column(String, unique=True, nullable=False)
 
-    applicant_user_id: Mapped[str] = mapped_column(
-        String, ForeignKey("users.id"), nullable=False
-    )
+    applicant_user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id"), nullable=False)
     loan_product_id: Mapped[str] = mapped_column(
         String, ForeignKey("loan_products.id"), nullable=False
     )

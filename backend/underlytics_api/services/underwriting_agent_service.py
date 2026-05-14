@@ -12,7 +12,7 @@ from underlytics_api.models.application import Application
 from underlytics_api.models.application_document import ApplicationDocument
 from underlytics_api.models.loan_product import LoanProduct
 from underlytics_api.models.user import User
-from underlytics_api.schemas.agent_execution import EvaluationAgentOutput
+from underlytics_api.schemas.structured_outputs import get_agent_output_model
 from underlytics_api.services.agent_runtime_service import run_structured_agent
 from underlytics_api.services.mcp_evidence_service import build_mcp_tool_evidence
 
@@ -67,9 +67,7 @@ def build_autonomous_agent_input(
 
     if agent_name == "policy_retrieval":
         product = (
-            db.query(LoanProduct)
-            .filter(LoanProduct.id == application.loan_product_id)
-            .first()
+            db.query(LoanProduct).filter(LoanProduct.id == application.loan_product_id).first()
         )
         return {
             "application": {
@@ -202,6 +200,7 @@ def execute_autonomous_underwriting_agent(
     output_map: dict[str, dict[str, Any]],
 ) -> AutonomousAgentExecution:
     prompt = get_agent_prompt_definition(agent_name)
+    output_model = get_agent_output_model(agent_name)
     scoped_input = build_autonomous_agent_input(
         db,
         application=application,
@@ -211,9 +210,10 @@ def execute_autonomous_underwriting_agent(
     output = _run_structured_agent(
         prompt=prompt,
         scoped_input=scoped_input,
-        output_type=EvaluationAgentOutput,
+        output_type=output_model,
     )
     runtime_metadata = _extract_runtime_metadata(output, prompt=prompt)
+    output = output_model.model_validate(output).model_dump(exclude_none=True)
     output["agent_metadata"] = {
         "agent_name": prompt.agent_name,
         "role": prompt.role,

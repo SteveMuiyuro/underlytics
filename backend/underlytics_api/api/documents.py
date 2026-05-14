@@ -36,11 +36,7 @@ async def upload_document(
     require_authenticated_actor(actor)
     require_registered_actor(actor)
 
-    application = (
-        db.query(Application)
-        .filter(Application.id == application_id)
-        .first()
-    )
+    application = db.query(Application).filter(Application.id == application_id).first()
 
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")

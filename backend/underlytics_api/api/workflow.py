@@ -33,17 +33,13 @@ def get_underwriting_job(
     require_registered_actor(actor)
 
     application = (
-        db.query(Application)
-        .filter(Application.application_number == application_number)
-        .first()
+        db.query(Application).filter(Application.application_number == application_number).first()
     )
 
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
 
-    enforce_application_access(
-        actor=actor, applicant_user_id=application.applicant_user_id
-    )
+    enforce_application_access(actor=actor, applicant_user_id=application.applicant_user_id)
 
     job = (
         db.query(UnderwritingJob)
@@ -76,9 +72,7 @@ def get_agent_runs(
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
 
-    enforce_application_access(
-        actor=actor, applicant_user_id=application.applicant_user_id
-    )
+    enforce_application_access(actor=actor, applicant_user_id=application.applicant_user_id)
 
     runs = (
         db.query(AgentRun)

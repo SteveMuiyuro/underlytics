@@ -11,9 +11,7 @@ class AgentOutput(Base):
     __tablename__ = "agent_outputs"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid4()))
-    agent_run_id: Mapped[str] = mapped_column(
-        String, ForeignKey("agent_runs.id"), nullable=False
-    )
+    agent_run_id: Mapped[str] = mapped_column(String, ForeignKey("agent_runs.id"), nullable=False)
     application_id: Mapped[str] = mapped_column(
         String, ForeignKey("applications.id"), nullable=False
     )

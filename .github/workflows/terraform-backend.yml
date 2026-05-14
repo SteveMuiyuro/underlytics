@@ -66,8 +66,8 @@ jobs:
       TF_VAR_langfuse_secret_key: ${{ secrets.TF_VAR_LANGFUSE_SECRET_KEY }}
       TF_VAR_langfuse_host: ${{ secrets.TF_VAR_LANGFUSE_HOST }}
       TF_VAR_openai_api_key: ${{ secrets.TF_VAR_OPENAI_API_KEY }}
-      TF_VAR_resend_api_key: ${{ secrets.TF_VAR_RESEND_API_KEY }}
-      TF_VAR_email_from: ${{ secrets.TF_VAR_EMAIL_FROM }}
+      TF_VAR_resend_api_key: ${{ secrets.RESEND_API_KEY || secrets.TF_VAR_RESEND_API_KEY }}
+      TF_VAR_email_from: ${{ secrets.EMAIL_FROM || secrets.TF_VAR_EMAIL_FROM }}
       TF_VAR_vertex_location: ${{ vars.VERTEX_LOCATION || vars.GCP_REGION }}
       TF_VAR_vertex_model: ${{ vars.VERTEX_MODEL || 'gemini-2.5-pro' }}
 

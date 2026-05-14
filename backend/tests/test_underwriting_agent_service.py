@@ -6,6 +6,13 @@ from underlytics_api.models.application_document import ApplicationDocument
 from underlytics_api.models.base import Base
 from underlytics_api.models.loan_product import LoanProduct
 from underlytics_api.models.user import User
+from underlytics_api.schemas.structured_outputs import (
+    DecisionSummaryOutput,
+    DocumentAnalysisOutput,
+    FraudVerificationOutput,
+    PolicyRetrievalOutput,
+    RiskAssessmentOutput,
+)
 from underlytics_api.services.underwriting_agent_service import (
     build_autonomous_agent_input,
     execute_autonomous_underwriting_agent,
@@ -157,6 +164,7 @@ def test_policy_and_fraud_agent_inputs_include_tool_evidence():
 
 def test_autonomous_agent_execution_includes_prompt_metadata(monkeypatch):
     db = make_session()
+    observed_output_types = {}
     outputs = {
         "document_analysis": {
             "score": 0.9,
@@ -196,6 +204,7 @@ def test_autonomous_agent_execution_includes_prompt_metadata(monkeypatch):
     }
 
     def fake_run_structured_agent(*, prompt, scoped_input, output_type):
+        observed_output_types[prompt.agent_name] = output_type
         runtime_model_name = (
             "gpt-5.3" if prompt.agent_name == "decision_summary" else prompt.model_name
         )
@@ -256,6 +265,11 @@ def test_autonomous_agent_execution_includes_prompt_metadata(monkeypatch):
     assert document_execution.output["agent_metadata"]["prompt_version"] == "v2"
     assert document_execution.output["agent_metadata"]["model_provider"] == "vertex_ai"
     assert document_execution.output["agent_metadata"]["model_name"] == "gemini-2.5-flash"
+    assert observed_output_types["document_analysis"] is DocumentAnalysisOutput
+    assert observed_output_types["policy_retrieval"] is PolicyRetrievalOutput
+    assert observed_output_types["risk_assessment"] is RiskAssessmentOutput
+    assert observed_output_types["fraud_verification"] is FraudVerificationOutput
+    assert observed_output_types["decision_summary"] is DecisionSummaryOutput
     assert decision_execution.prompt.model_name == "gpt-5.4"
     assert decision_execution.output["agent_metadata"]["model_provider"] == "openai"
     assert decision_execution.output["agent_metadata"]["model_name"] == "gpt-5.3"

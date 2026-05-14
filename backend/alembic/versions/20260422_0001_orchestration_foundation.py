@@ -227,9 +227,7 @@ def upgrade() -> None:
         sa.Column("old_decision", sa.String(), nullable=True),
         sa.Column("new_decision", sa.String(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["manual_review_case_id"], ["manual_review_cases.id"]
-        ),
+        sa.ForeignKeyConstraint(["manual_review_case_id"], ["manual_review_cases.id"]),
         sa.ForeignKeyConstraint(["reviewer_user_id"], ["users.id"]),
         sa.PrimaryKeyConstraint("id"),
     )

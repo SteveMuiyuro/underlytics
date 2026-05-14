@@ -126,8 +126,7 @@ def _verify_clerk_token(token: str) -> dict[str, Any]:
         allowed_parties = {
             normalized
             for normalized in (
-                _normalize_authorized_party(candidate)
-                for candidate in CLERK_AUTHORIZED_PARTIES
+                _normalize_authorized_party(candidate) for candidate in CLERK_AUTHORIZED_PARTIES
             )
             if normalized
         }

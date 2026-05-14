@@ -59,9 +59,7 @@ def materialize_underwriting_plan(
             step_key=drafted_step.step_key,
             step_type=drafted_step.step_type,
             worker_name=drafted_step.worker_name,
-            status=_initial_step_status(
-                drafted_step.step_key, len(drafted_step.dependencies)
-            ),
+            status=_initial_step_status(drafted_step.step_key, len(drafted_step.dependencies)),
             queue_name=drafted_step.queue_name,
             input_context_json=json.dumps(drafted_step.input_context),
             output_schema_version="v1",
@@ -96,20 +94,14 @@ def get_ready_steps(db: Session, workflow_plan_id: str) -> list[WorkflowStep]:
 
     dependency_rows = (
         db.query(WorkflowStepDependency)
-        .filter(
-            WorkflowStepDependency.workflow_step_id.in_([step.id for step in steps])
-        )
+        .filter(WorkflowStepDependency.workflow_step_id.in_([step.id for step in steps]))
         .all()
     )
 
-    completed_step_ids = {
-        step.id for step in steps if step.status in {"completed", "skipped"}
-    }
+    completed_step_ids = {step.id for step in steps if step.status in {"completed", "skipped"}}
     dependencies_by_step: dict[str, list[str]] = {}
     for row in dependency_rows:
-        dependencies_by_step.setdefault(row.workflow_step_id, []).append(
-            row.depends_on_step_id
-        )
+        dependencies_by_step.setdefault(row.workflow_step_id, []).append(row.depends_on_step_id)
 
     ready_steps: list[WorkflowStep] = []
     for step in steps:

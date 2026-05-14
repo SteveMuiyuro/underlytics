@@ -32,6 +32,7 @@ jobs:
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
           VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
           VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_TOKEN_PRESENT: ${{ secrets.VERCEL_TOKEN != '' }}
         run: |
           reasons=()
 
@@ -39,6 +40,7 @@ jobs:
           [ "$HEAD_BRANCH" = "main" ] || reasons+=("head branch is '$HEAD_BRANCH'")
           [ -n "$VERCEL_PROJECT_ID" ] || reasons+=("VERCEL_PROJECT_ID is missing")
           [ -n "$VERCEL_ORG_ID" ] || reasons+=("VERCEL_ORG_ID is missing")
+          [ "$VERCEL_TOKEN_PRESENT" = "true" ] || reasons+=("VERCEL_TOKEN is missing")
 
           if [ "${#reasons[@]}" -eq 0 ]; then
             echo "can_deploy=true" >> "$GITHUB_OUTPUT"
@@ -59,6 +61,7 @@ jobs:
             echo "- Terraform deploy status: \`${status}\`"
             echo "- Blockers: \`${reason_text}\`"
             echo "- Terraform steps in this workflow: \`terraform init\`, \`terraform validate\`, \`terraform apply\` in \`infra/frontend\` before Vercel deploy"
+            echo "- Required secret check: \`VERCEL_TOKEN\` must be configured"
           } >> "$GITHUB_STEP_SUMMARY"
 
   deploy:

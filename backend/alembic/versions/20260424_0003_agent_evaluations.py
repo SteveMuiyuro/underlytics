@@ -43,9 +43,7 @@ def upgrade() -> None:
         sa.Column("error_message", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.ForeignKeyConstraint(["application_id"], ["applications.id"]),
-        sa.ForeignKeyConstraint(
-            ["workflow_step_attempt_id"], ["workflow_step_attempts.id"]
-        ),
+        sa.ForeignKeyConstraint(["workflow_step_attempt_id"], ["workflow_step_attempts.id"]),
         sa.ForeignKeyConstraint(["workflow_step_id"], ["workflow_steps.id"]),
         sa.PrimaryKeyConstraint("id"),
     )

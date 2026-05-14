@@ -78,10 +78,7 @@ def _serialize_case(
 
     return ManualReviewCaseDetailResponse(
         **payload,
-        actions=[
-            ManualReviewActionResponse.model_validate(action)
-            for action in actions
-        ],
+        actions=[ManualReviewActionResponse.model_validate(action) for action in actions],
     )
 
 
@@ -109,15 +106,11 @@ def list_manual_review_cases(
 
     applications = {
         application.id: application
-        for application in db.query(Application)
-        .filter(Application.id.in_(application_ids))
-        .all()
+        for application in db.query(Application).filter(Application.id.in_(application_ids)).all()
     }
     workflow_plans = {
         plan.id: plan
-        for plan in db.query(WorkflowPlan)
-        .filter(WorkflowPlan.id.in_(workflow_plan_ids))
-        .all()
+        for plan in db.query(WorkflowPlan).filter(WorkflowPlan.id.in_(workflow_plan_ids)).all()
     }
 
     return [

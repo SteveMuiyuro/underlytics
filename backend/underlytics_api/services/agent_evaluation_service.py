@@ -54,9 +54,7 @@ def record_agent_evaluation(
     normalized_final_decision = final_decision or decision
     flags = output.get("flags", []) if output else []
     guardrail_adjusted = (
-        bool(decision)
-        and bool(normalized_final_decision)
-        and decision != normalized_final_decision
+        bool(decision) and bool(normalized_final_decision) and decision != normalized_final_decision
     )
 
     evaluation = AgentEvaluation(

@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError
@@ -66,11 +65,7 @@ def sync_user(
             detail="Authenticated user cannot sync a different Clerk identity",
         )
 
-    existing_user = (
-        db.query(User)
-        .filter(User.clerk_user_id == payload.clerk_user_id)
-        .first()
-    )
+    existing_user = db.query(User).filter(User.clerk_user_id == payload.clerk_user_id).first()
 
     if existing_user:
         existing_user.email = payload.email
