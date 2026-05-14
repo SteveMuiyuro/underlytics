@@ -1,10 +1,12 @@
 # Underlytics
 
-Underlytics is an AI-powered loan underwriting platform that combines a Next.js frontend, a FastAPI backend, an agent-based underwriting workflow, and a cloud deployment pipeline. The product is designed to intake loan applications, orchestrate specialist underwriting agents, apply hard guardrails, surface explainable decisions, and support manual review when automation should not make the final call.
+Underlytics is an AI-assisted loan underwriting platform built for lenders that need to process applications faster, more consistently, and with clearer audit trails. It gives applicants a digital flow for submitting loan details and supporting documents, then routes each case through a structured underwriting workflow that checks document completeness, policy fit, repayment risk, and potential fraud signals.
+
+Rather than relying on a single opaque model response, Underlytics orchestrates specialist AI agents, stores structured outputs, applies deterministic guardrails, and escalates uncertain or high-risk cases to manual review. The result is a system that combines automation with human oversight, helping credit teams reduce turnaround time while keeping decisions explainable, reviewable, and operationally safe.
 
 Live application: https://underlytics.vercel.app/
 
-The current repository includes:
+This repository includes:
 
 - a Clerk-protected frontend application for applicants, reviewers, and admins
 - a FastAPI backend API with underwriting, workflow, manual review, and document endpoints
