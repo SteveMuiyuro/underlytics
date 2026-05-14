@@ -388,6 +388,56 @@ def test_send_manual_review_escalation_notification_is_deduplicated(monkeypatch)
     assert len(stored_logs) == 1
 
 
+def test_send_automated_decision_notification_skips_when_pending_log_exists(monkeypatch):
+    db = make_session()
+    provider = FakeProvider()
+    monkeypatch.setattr(notification_service, "_build_email_provider", lambda: provider)
+    monkeypatch.setattr(
+        notification_service,
+        "_run_structured_agent",
+        lambda **kwargs: {
+            "subject": "Approved",
+            "html_body": "<!doctype html><html><body>Approved</body></html>",
+        },
+    )
+
+    try:
+        application = seed_application(db)
+        add_decision_output(
+            db,
+            application_id=application.id,
+            decision="approved",
+            reasoning="Application meets underwriting thresholds.",
+        )
+        db.add(
+            CommunicationLog(
+                application_id=application.id,
+                manual_review_case_id=None,
+                recipient_email="applicant@example.com",
+                template_key="agent_final_approved",
+                subject="[pending notification]",
+                body_text="Notification reserved for delivery.",
+                status="pending",
+                channel="email",
+                metadata_json="{}",
+            )
+        )
+        db.commit()
+
+        log = notification_service.send_automated_decision_notification(
+            db,
+            application_id=application.id,
+            decision="approved",
+        )
+        stored_logs = db.query(CommunicationLog).all()
+    finally:
+        db.close()
+
+    assert log is None
+    assert len(stored_logs) == 1
+    assert provider.sent == []
+
+
 def test_send_manual_review_completed_notification_uses_final_email_type(monkeypatch):
     db = make_session()
     provider = FakeProvider()
@@ -449,13 +499,26 @@ def test_send_application_email_skips_when_recipient_is_missing():
 
     try:
         application = seed_application(db, email="")
+        reserved_log = CommunicationLog(
+            application_id=application.id,
+            manual_review_case_id=None,
+            recipient_email="",
+            template_key="agent_final_rejected",
+            subject="[pending notification]",
+            body_text="Notification reserved for delivery.",
+            status="pending",
+            channel="email",
+            metadata_json="{}",
+        )
+        db.add(reserved_log)
+        db.commit()
+        db.refresh(reserved_log)
         log = notification_service.send_application_email(
             db=db,
-            application_id=application.id,
+            log=reserved_log,
             to_email="",
             subject="Subject",
             html_body="<!doctype html><html><body>Body</body></html>",
-            email_type="agent_final_rejected",
         )
     finally:
         db.close()
@@ -513,13 +576,26 @@ def test_send_application_email_marks_failed_provider_attempt(monkeypatch):
 
     try:
         application = seed_application(db)
+        reserved_log = CommunicationLog(
+            application_id=application.id,
+            manual_review_case_id=None,
+            recipient_email="applicant@example.com",
+            template_key="agent_final_rejected",
+            subject="[pending notification]",
+            body_text="Notification reserved for delivery.",
+            status="pending",
+            channel="email",
+            metadata_json="{}",
+        )
+        db.add(reserved_log)
+        db.commit()
+        db.refresh(reserved_log)
         log = notification_service.send_application_email(
             db=db,
-            application_id=application.id,
+            log=reserved_log,
             to_email="applicant@example.com",
             subject="Subject",
             html_body="<!doctype html><html><body>Body</body></html>",
-            email_type="agent_final_rejected",
         )
     finally:
         db.close()

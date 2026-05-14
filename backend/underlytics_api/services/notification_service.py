@@ -172,7 +172,7 @@ def _existing_sent_log(
     query = db.query(CommunicationLog).filter(
         CommunicationLog.application_id == application_id,
         CommunicationLog.template_key == email_type,
-        CommunicationLog.status == "sent",
+        CommunicationLog.status.in_(("pending", "sent")),
     )
 
     if manual_review_case_id:
@@ -181,6 +181,52 @@ def _existing_sent_log(
         query = query.filter(CommunicationLog.manual_review_case_id.is_(None))
 
     return query.order_by(CommunicationLog.created_at.desc()).first()
+
+
+def _reserve_communication_log(
+    db: Session,
+    *,
+    application_id: str,
+    recipient_email: str,
+    email_type: str,
+    manual_review_case_id: str | None = None,
+    metadata: dict | None = None,
+) -> CommunicationLog | None:
+    if _existing_sent_log(
+        db,
+        application_id=application_id,
+        email_type=email_type,
+        manual_review_case_id=manual_review_case_id,
+    ):
+        return None
+
+    log = CommunicationLog(
+        application_id=application_id,
+        manual_review_case_id=manual_review_case_id,
+        recipient_email=recipient_email or "",
+        template_key=email_type,
+        subject="[pending notification]",
+        body_text="Notification reserved for delivery.",
+        status="pending",
+        channel="email",
+        metadata_json=json.dumps(metadata or {}),
+    )
+    db.add(log)
+    db.commit()
+    db.refresh(log)
+    return log
+
+
+def _mark_reserved_log_failed(
+    db: Session,
+    *,
+    log: CommunicationLog,
+    error_message: str,
+) -> None:
+    log.status = "failed"
+    log.error_message = error_message
+    db.add(log)
+    db.commit()
 
 
 def generate_application_email(
@@ -278,29 +324,14 @@ def generate_application_email(
 def send_application_email(
     *,
     db: Session,
-    application_id: str,
+    log: CommunicationLog,
     to_email: str,
     subject: str,
     html_body: str,
-    email_type: str,
-    manual_review_case_id: str | None = None,
-    metadata: dict | None = None,
 ) -> CommunicationLog:
-    if email_type not in EMAIL_TYPES:
-        raise ValueError(f"Unsupported email type '{email_type}'")
-
-    log = CommunicationLog(
-        application_id=application_id,
-        manual_review_case_id=manual_review_case_id,
-        recipient_email=to_email or "",
-        template_key=email_type,
-        subject=subject,
-        body_text=html_body,
-        status="pending",
-        channel="email",
-        metadata_json=json.dumps(metadata or {}),
-    )
-    db.add(log)
+    log.recipient_email = to_email or ""
+    log.subject = subject
+    log.body_text = html_body
 
     provider = _build_email_provider()
 
@@ -357,25 +388,40 @@ def send_automated_decision_notification(
         return None
 
     context = _load_application_email_context(db, application_id=application_id)
-
-    email_payload = generate_application_email(
-        application=context.application,
-        applicant=context.applicant,
-        agent_outputs=context.agent_outputs,
-        email_type=email_type,
-    )
-
-    return send_application_email(
-        db=db,
+    log = _reserve_communication_log(
+        db,
         application_id=context.application.id,
-        to_email=context.applicant.email,
-        subject=email_payload["subject"],
-        html_body=email_payload["html_body"],
+        recipient_email=context.applicant.email,
         email_type=email_type,
         metadata={
             "application_number": context.application.application_number,
             "decision": decision,
         },
+    )
+    if log is None:
+        return None
+
+    try:
+        email_payload = generate_application_email(
+            application=context.application,
+            applicant=context.applicant,
+            agent_outputs=context.agent_outputs,
+            email_type=email_type,
+        )
+    except Exception as exc:
+        _mark_reserved_log_failed(
+            db,
+            log=log,
+            error_message=f"Email generation failed: {exc}",
+        )
+        raise
+
+    return send_application_email(
+        db=db,
+        log=log,
+        to_email=context.applicant.email,
+        subject=email_payload["subject"],
+        html_body=email_payload["html_body"],
     )
 
 
@@ -400,26 +446,41 @@ def send_manual_review_escalation_notification(
         return None
 
     context = _load_application_email_context(db, application_id=case.application_id)
-
-    email_payload = generate_application_email(
-        application=context.application,
-        applicant=context.applicant,
-        agent_outputs=context.agent_outputs,
-        email_type=email_type,
-    )
-
-    return send_application_email(
-        db=db,
+    log = _reserve_communication_log(
+        db,
         application_id=context.application.id,
-        to_email=context.applicant.email,
-        subject=email_payload["subject"],
-        html_body=email_payload["html_body"],
+        recipient_email=context.applicant.email,
         email_type=email_type,
         manual_review_case_id=case.id,
         metadata={
             "application_number": context.application.application_number,
             "manual_review_case_id": case.id,
         },
+    )
+    if log is None:
+        return None
+
+    try:
+        email_payload = generate_application_email(
+            application=context.application,
+            applicant=context.applicant,
+            agent_outputs=context.agent_outputs,
+            email_type=email_type,
+        )
+    except Exception as exc:
+        _mark_reserved_log_failed(
+            db,
+            log=log,
+            error_message=f"Email generation failed: {exc}",
+        )
+        raise
+
+    return send_application_email(
+        db=db,
+        log=log,
+        to_email=context.applicant.email,
+        subject=email_payload["subject"],
+        html_body=email_payload["html_body"],
     )
 
 
@@ -461,22 +522,10 @@ def send_manual_review_completed_notification(
         return None
 
     context = _load_application_email_context(db, application_id=case.application_id)
-
-    email_payload = generate_application_email(
-        application=context.application,
-        applicant=context.applicant,
-        agent_outputs=context.agent_outputs,
-        email_type=email_type,
-        reviewer_note=resolution_action.note,
-        reviewer_decision=resolution_action.new_decision,
-    )
-
-    return send_application_email(
-        db=db,
+    log = _reserve_communication_log(
+        db,
         application_id=context.application.id,
-        to_email=context.applicant.email,
-        subject=email_payload["subject"],
-        html_body=email_payload["html_body"],
+        recipient_email=context.applicant.email,
         email_type=email_type,
         manual_review_case_id=case.id,
         metadata={
@@ -484,4 +533,31 @@ def send_manual_review_completed_notification(
             "manual_review_case_id": case.id,
             "decision": resolution_action.new_decision,
         },
+    )
+    if log is None:
+        return None
+
+    try:
+        email_payload = generate_application_email(
+            application=context.application,
+            applicant=context.applicant,
+            agent_outputs=context.agent_outputs,
+            email_type=email_type,
+            reviewer_note=resolution_action.note,
+            reviewer_decision=resolution_action.new_decision,
+        )
+    except Exception as exc:
+        _mark_reserved_log_failed(
+            db,
+            log=log,
+            error_message=f"Email generation failed: {exc}",
+        )
+        raise
+
+    return send_application_email(
+        db=db,
+        log=log,
+        to_email=context.applicant.email,
+        subject=email_payload["subject"],
+        html_body=email_payload["html_body"],
     )

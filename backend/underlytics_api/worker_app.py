@@ -5,8 +5,8 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from underlytics_api.db.database import SessionLocal
-from underlytics_api.services.orchestrator_service import materialize_underwriting_plan
-from underlytics_api.services.worker_service import run_workflow_plan
+from underlytics_api.models.workflow_plan import WorkflowPlan
+from underlytics_api.services.workflow_service import create_underwriting_workflow
 
 app = FastAPI(title="Underlytics Worker")
 
@@ -55,11 +55,16 @@ def run_workflow_from_pubsub(envelope: PubSubEnvelope):
     db = SessionLocal()
 
     try:
-        plan = materialize_underwriting_plan(db, application_id)
-        job = run_workflow_plan(db, plan)
+        job = create_underwriting_workflow(db, application_id)
+        plan = (
+            db.query(WorkflowPlan)
+            .filter(WorkflowPlan.application_id == application_id)
+            .order_by(WorkflowPlan.created_at.desc())
+            .first()
+        )
         return {
             "status": "processed",
-            "workflow_plan_id": plan.id,
+            "workflow_plan_id": plan.id if plan else None,
             "underwriting_job_id": job.id,
         }
     finally:

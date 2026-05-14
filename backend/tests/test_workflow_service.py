@@ -5,8 +5,12 @@ from underlytics_api.models.application import Application
 from underlytics_api.models.application_document import ApplicationDocument
 from underlytics_api.models.base import Base
 from underlytics_api.models.loan_product import LoanProduct
+from underlytics_api.models.underwriting_job import UnderwritingJob
 from underlytics_api.models.user import User
-from underlytics_api.services.workflow_service import create_underwriting_workflow
+from underlytics_api.services.workflow_service import (
+    create_underwriting_workflow,
+    restart_underwriting_workflow,
+)
 
 
 def make_session() -> Session:
@@ -85,3 +89,105 @@ def test_create_underwriting_workflow_completes_for_low_risk_application():
 
     assert job.status == "completed"
     assert application.status == "approved"
+
+
+def test_create_underwriting_workflow_reuses_existing_active_job(monkeypatch):
+    db = make_session()
+
+    try:
+        application = seed_application(db)
+        existing_job = UnderwritingJob(
+            application_id=application.id,
+            status="running",
+            current_step="risk_assessment",
+        )
+        db.add(existing_job)
+        db.commit()
+        db.refresh(existing_job)
+
+        monkeypatch.setattr(
+            "underlytics_api.services.workflow_service.materialize_underwriting_plan",
+            lambda *args, **kwargs: (_ for _ in ()).throw(
+                AssertionError("Should not create a new workflow plan")
+            ),
+        )
+
+        job = create_underwriting_workflow(db, application.id)
+    finally:
+        db.close()
+
+    assert job.id == existing_job.id
+
+
+def test_create_underwriting_workflow_reuses_existing_completed_job_for_final_application(
+    monkeypatch,
+):
+    db = make_session()
+
+    try:
+        application = seed_application(db)
+        application.status = "approved"
+        db.add(application)
+        db.commit()
+
+        existing_job = UnderwritingJob(
+            application_id=application.id,
+            status="completed",
+            current_step="workers_completed",
+        )
+        db.add(existing_job)
+        db.commit()
+        db.refresh(existing_job)
+
+        monkeypatch.setattr(
+            "underlytics_api.services.workflow_service.materialize_underwriting_plan",
+            lambda *args, **kwargs: (_ for _ in ()).throw(
+                AssertionError("Should not create a new workflow plan")
+            ),
+        )
+
+        job = create_underwriting_workflow(db, application.id)
+    finally:
+        db.close()
+
+    assert job.id == existing_job.id
+
+
+def test_restart_underwriting_workflow_forces_new_run(monkeypatch):
+    db = make_session()
+    observed: dict = {}
+
+    try:
+        application = seed_application(db)
+        application.status = "approved"
+        db.add(application)
+        db.commit()
+
+        existing_job = UnderwritingJob(
+            application_id=application.id,
+            status="completed",
+            current_step="workers_completed",
+        )
+        db.add(existing_job)
+        db.commit()
+
+        monkeypatch.setattr(
+            "underlytics_api.services.workflow_service.materialize_underwriting_plan",
+            lambda *args, **kwargs: "fake-plan",
+        )
+
+        def fake_run_workflow_plan(db, plan):
+            observed["plan"] = plan
+            return UnderwritingJob(application_id=application.id, status="completed")
+
+        monkeypatch.setattr(
+            "underlytics_api.services.workflow_service.run_workflow_plan",
+            fake_run_workflow_plan,
+        )
+
+        job = restart_underwriting_workflow(db, application.id)
+    finally:
+        db.close()
+
+    assert observed["plan"] == "fake-plan"
+    assert job.application_id == application.id
