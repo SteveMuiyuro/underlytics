@@ -165,6 +165,7 @@ def _run_openai_structured_agent(
     payload = _build_agent_payload(prompt=prompt, scoped_input=scoped_input)
     model_candidates = _candidate_model_names(prompt)
     last_error: Exception | None = None
+    saw_structured_output_error = False
 
     for index, model_name in enumerate(model_candidates):
         agent = Agent(
@@ -198,21 +199,26 @@ def _run_openai_structured_agent(
                 }
             except Exception as exc:
                 last_error = exc
-                if not _is_structured_output_error(exc):
+                if _is_structured_output_error(exc):
+                    saw_structured_output_error = True
+                    continue
+
+                if _is_openai_model_unavailable_error(exc):
                     break
 
-        is_last_candidate = index == len(model_candidates) - 1
+                raise
 
-        if is_last_candidate or not _is_openai_model_unavailable_error(
-            last_error or RuntimeError("Unknown OpenAI agent error")
-        ):
-            return {
-                **_fallback_structured_output(prompt),
-                **_runtime_metadata(
-                    provider="deterministic_fallback",
-                    model_name=f"{prompt.agent_name}_fallback",
-                ),
-            }
+        if index < len(model_candidates) - 1:
+            continue
+
+    if saw_structured_output_error:
+        return {
+            **_fallback_structured_output(prompt),
+            **_runtime_metadata(
+                provider="deterministic_fallback",
+                model_name=f"{prompt.agent_name}_fallback",
+            ),
+        }
 
     if last_error is not None:
         raise last_error

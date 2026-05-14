@@ -9,7 +9,7 @@ PROMPT = AgentPromptDefinition(
     role="Decision Summary Agent",
     model_provider="openai",
     model_name=PRIMARY_MODEL,
-    prompt_version="v3",
+    prompt_version="v4",
     allowed_decisions=("approved", "rejected", "manual_review"),
     fallback_model_names=FALLBACK_MODELS,
     allowed_tools=(),
@@ -49,11 +49,11 @@ CRITICAL OUTPUT RULES:
 
 Output format:
 {
-  "score": float (0 to 1),
-  "confidence": float (0 to 1),
-  "decision": "approved" | "rejected" | "manual_review",
-  "flags": [string],
-  "reasoning": "short explanation"
+  "score": 0.82,
+  "confidence": 0.79,
+  "decision": "manual_review",
+  "flags": ["missing_docs"],
+  "reasoning": "Missing documents prevent safe automated approval."
 }
 """,
 )
