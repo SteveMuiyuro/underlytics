@@ -652,6 +652,42 @@ export default function NewApplicationForm({
               </div>
             </CardContent>
           </Card>
+
+          {error ? (
+            <FormMessage className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
+              {error}
+            </FormMessage>
+          ) : null}
+
+          {!allRequiredDocumentsSelected ? (
+            <FormMessage className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
+              Upload all required documents before submission:{" "}
+              {missingDocumentLabels.join(", ")}.
+            </FormMessage>
+          ) : null}
+
+          <div className="flex flex-col gap-3 rounded-[28px] border border-slate-200/80 bg-white p-5 shadow-sm">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-slate-900">Ready to submit?</p>
+              <p className="text-sm text-slate-500">
+                Submit the application immediately after the last required upload.
+              </p>
+            </div>
+
+            <Button
+              type="submit"
+              className="h-11 w-full rounded-2xl"
+              disabled={isSubmitting || !allRequiredDocumentsSelected}
+            >
+              {isSubmitting
+                ? "Submitting and Starting Evaluation..."
+                : "Submit Application"}
+            </Button>
+
+            <Button type="button" variant="outline" className="h-11 w-full rounded-2xl" disabled>
+              Save as Draft Soon
+            </Button>
+          </div>
         </div>
 
         <div className="space-y-6">
@@ -729,35 +765,6 @@ export default function NewApplicationForm({
               </div>
             </CardContent>
           </Card>
-
-          {error ? (
-            <FormMessage className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
-              {error}
-            </FormMessage>
-          ) : null}
-
-          {!allRequiredDocumentsSelected ? (
-            <FormMessage className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
-              Upload all required documents before submission:{" "}
-              {missingDocumentLabels.join(", ")}.
-            </FormMessage>
-          ) : null}
-
-          <div className="flex flex-col gap-3">
-            <Button
-              type="submit"
-              className="h-11 w-full rounded-2xl"
-              disabled={isSubmitting || !allRequiredDocumentsSelected}
-            >
-              {isSubmitting
-                ? "Submitting and Starting Evaluation..."
-                : "Submit Application"}
-            </Button>
-
-            <Button type="button" variant="outline" className="h-11 w-full rounded-2xl" disabled>
-              Save as Draft Soon
-            </Button>
-          </div>
         </div>
       </div>
     </Form>
