@@ -99,6 +99,7 @@ def test_run_structured_agent_falls_back_to_next_openai_model(monkeypatch):
         "_is_test_or_deterministic_mode",
         lambda: False,
     )
+    monkeypatch.setattr(agent_runtime_service, "OPENAI_API_KEY", "test-openai-key")
     monkeypatch.setattr(agent_runtime_service, "Agent", FakeAgent)
     monkeypatch.setattr(agent_runtime_service.Runner, "run_sync", fake_run_sync)
 
@@ -153,6 +154,7 @@ def test_run_structured_agent_tries_next_model_after_structured_output_failure(m
         return ValidStructuredResult()
 
     monkeypatch.setattr(agent_runtime_service, "_is_test_or_deterministic_mode", lambda: False)
+    monkeypatch.setattr(agent_runtime_service, "OPENAI_API_KEY", "test-openai-key")
     monkeypatch.setattr(agent_runtime_service, "Agent", FakeAgent)
     monkeypatch.setattr(agent_runtime_service.Runner, "run_sync", fake_run_sync)
 
@@ -197,6 +199,7 @@ def test_run_structured_agent_uses_deterministic_fallback_only_after_all_models_
         return InvalidStructuredResult()
 
     monkeypatch.setattr(agent_runtime_service, "_is_test_or_deterministic_mode", lambda: False)
+    monkeypatch.setattr(agent_runtime_service, "OPENAI_API_KEY", "test-openai-key")
     monkeypatch.setattr(agent_runtime_service, "Agent", FakeAgent)
     monkeypatch.setattr(agent_runtime_service.Runner, "run_sync", fake_run_sync)
 
