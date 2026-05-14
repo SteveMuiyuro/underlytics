@@ -212,6 +212,24 @@ def test_run_structured_agent_uses_deterministic_fallback_only_after_all_models_
     assert result["__runtime"]["model_name"] == "decision_summary_fallback"
 
 
+def test_run_structured_agent_raises_clear_error_when_openai_key_missing(monkeypatch):
+    prompt = make_prompt(provider="openai", model_name="gpt-5.4")
+
+    monkeypatch.setattr(agent_runtime_service, "_is_test_or_deterministic_mode", lambda: False)
+    monkeypatch.setattr(agent_runtime_service, "OPENAI_API_KEY", None)
+
+    try:
+        agent_runtime_service.run_structured_agent(
+            prompt=prompt,
+            scoped_input={"value": 1},
+            output_type=EvaluationAgentOutput,
+        )
+    except RuntimeError as exc:
+        assert str(exc) == "OPENAI_API_KEY is required for OpenAI structured agent execution"
+    else:
+        raise AssertionError("Expected RuntimeError when OPENAI_API_KEY is missing")
+
+
 def test_run_structured_agent_rejects_unknown_provider():
     prompt = make_prompt(provider="unknown_provider")
 

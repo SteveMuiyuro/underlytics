@@ -8,7 +8,7 @@ from agents import Agent, AgentOutputSchema, ModelSettings, Runner
 from pydantic import BaseModel
 
 from underlytics_api.agents.prompts.base import AgentPromptDefinition
-from underlytics_api.core.config import GOOGLE_CLOUD_LOCATION, GOOGLE_CLOUD_PROJECT
+from underlytics_api.core.config import GOOGLE_CLOUD_LOCATION, GOOGLE_CLOUD_PROJECT, OPENAI_API_KEY
 
 MAX_AGENT_ATTEMPTS = 3
 
@@ -161,6 +161,9 @@ def _run_openai_structured_agent(
 ) -> dict[str, Any]:
     if _is_test_or_deterministic_mode():
         return _fallback_structured_output(prompt)
+
+    if not OPENAI_API_KEY:
+        raise RuntimeError("OPENAI_API_KEY is required for OpenAI structured agent execution")
 
     payload = _build_agent_payload(prompt=prompt, scoped_input=scoped_input)
     model_candidates = _candidate_model_names(prompt)

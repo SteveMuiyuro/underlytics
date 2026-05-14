@@ -36,6 +36,7 @@ jobs:
           GCP_REGION: ${{ vars.GCP_REGION }}
           GCP_WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
           GCP_TERRAFORM_SERVICE_ACCOUNT: ${{ vars.GCP_TERRAFORM_SERVICE_ACCOUNT }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || secrets.TF_VAR_OPENAI_API_KEY }}
         run: |
           missing=()
 
@@ -43,6 +44,7 @@ jobs:
           [ -n "$GCP_REGION" ] || missing+=("GCP_REGION")
           [ -n "$GCP_WIF_PROVIDER" ] || missing+=("GCP_WIF_PROVIDER")
           [ -n "$GCP_TERRAFORM_SERVICE_ACCOUNT" ] || missing+=("GCP_TERRAFORM_SERVICE_ACCOUNT")
+          [ -n "$OPENAI_API_KEY" ] || missing+=("OPENAI_API_KEY")
 
           if [ "${#missing[@]}" -eq 0 ]; then
             echo "can_deploy=true" >> "$GITHUB_OUTPUT"
@@ -131,7 +133,7 @@ jobs:
       TF_VAR_langfuse_public_key: ${{ secrets.TF_VAR_LANGFUSE_PUBLIC_KEY }}
       TF_VAR_langfuse_secret_key: ${{ secrets.TF_VAR_LANGFUSE_SECRET_KEY }}
       TF_VAR_langfuse_host: ${{ secrets.TF_VAR_LANGFUSE_HOST }}
-      TF_VAR_openai_api_key: ${{ secrets.TF_VAR_OPENAI_API_KEY }}
+      TF_VAR_openai_api_key: ${{ secrets.OPENAI_API_KEY || secrets.TF_VAR_OPENAI_API_KEY }}
 
       # Email provider secrets.
       # These use normal GitHub secret names: RESEND_API_KEY and EMAIL_FROM.
